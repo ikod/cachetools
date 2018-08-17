@@ -1,0 +1,27 @@
+{
+  "name": "cachetools",
+  "authors": [
+    "Igor Khasilev"
+  ],
+  "dependencies": {
+    "stdx-allocator": "~>2"
+  },
+  "buildTypes": {
+    "debug": {
+      "buildOptions": [
+        "debugMode",
+        "debugInfo"
+      ],
+      "dflags-dmd": [
+        "-g", "-gf"
+      ],
+      "dflags-ldc": [
+        "-d-debug=requests"
+      ]
+    }
+  },
+  "sourcePaths": ["source"],
+  "importPaths": ["source"],
+  "description": "A minimal D application.",
+  "license": "proprietary"
+}
