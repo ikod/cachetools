@@ -1,7 +1,7 @@
 module cachetools.containers.hashmap;
 
 import std.traits;
-
+import optional;
 
 private import stdx.allocator;
 private import stdx.allocator.mallocator : Mallocator;
@@ -189,25 +189,29 @@ struct HashMap(K, V, Allocator = Mallocator) {
     }
 
     /// return true if updated in table
-    private bool update_in_table(_Table* t, K k, V v, hash_t computed_hash) @nogc @safe {
+    private Optional!V update_in_table(_Table* t, K k, V v, hash_t computed_hash) @nogc @safe {
         immutable ulong hash = computed_hash % t._buckets_size;
 
-        bool updated;
+        Optional!V r;
         auto chain = t._buckets[hash]._chain[];
         foreach(nodep; chain) {
             if (nodep.key == k) {
                 // key found, replace. all done
+                r = nodep.value;
                 nodep.value = v;
-                updated = true;
                 break;
             }
         }
-        return updated;
+        return r;
     }
 
-    V get(K k, out bool ok, V def = V.init) @safe @nogc {
+    Optional!V get(K k) @safe @nogc {
+        if ( _main_table._buckets_size == 0 ) {
+            _main_table._buckets_size = 32;
+            _main_table._buckets = makeArray!(_Bucket)(allocator, _main_table._buckets_size);
+        }
+        auto r = no!V;
         _stat.gets++;
-        ok = true;
         immutable ulong computed_hash = hash_function(k);
         _Table *t = &_main_table;
         ulong hash = computed_hash % t._buckets_size;
@@ -215,12 +219,12 @@ struct HashMap(K, V, Allocator = Mallocator) {
         foreach(nodep; chain) {
             if (nodep.key == k) {
                 _stat.hits++;
-                return nodep.value;
+                r = nodep.value;
+                break;
             }
         }
         if ( !_in_resize ) {
-            ok = false;
-            return def;
+            return r;
         }
         //
         do_resize_step();
@@ -231,15 +235,15 @@ struct HashMap(K, V, Allocator = Mallocator) {
         foreach(nodep; chain) {
             if (nodep.key == k) {
                 _stat.hits++;
-                return nodep.value;
+                r = nodep.value;
+                break;
             }
         }
         // notfound
-        ok = false;
-        return def;
+        return r;
     }
 
-    void put(K k, V v, out bool inserted) @nogc @safe {
+    Optional!V put(K k, V v) @nogc @safe {
         if ( _main_table._buckets_size == 0 ) {
             _main_table._buckets_size = 32;
             _main_table._buckets = makeArray!(_Bucket)(allocator, _main_table._buckets_size);
@@ -257,12 +261,18 @@ struct HashMap(K, V, Allocator = Mallocator) {
         
         immutable computed_hash = hash_function(k);
 
-        if ( update_in_table(&_main_table, k, v, computed_hash) ) {
-            return;
+
+        auto u = update_in_table(&_main_table, k, v, computed_hash);
+
+        if ( u != none ) {
+            return u;
+        }
+        if ( _in_resize ) {
+            u = update_in_table(&_resize_table, k, v, computed_hash);
         }
 
-        if ( _in_resize && update_in_table(&_resize_table, k, v, computed_hash) ) {
-            return;
+        if ( u != none ) {
+            return u;
         }
         //
         // key is not in map.
@@ -273,31 +283,30 @@ struct HashMap(K, V, Allocator = Mallocator) {
         hash_t h = computed_hash % table._buckets_size;
         table._buckets[h]._chain.insertFront(n);
         table._length++;
-        inserted = true;
         _stat.inserts++;
+        return no!V;
     }
 
-    void remove(K k, out bool ok) @nogc @safe nothrow {
+    bool remove(K k) @nogc @safe nothrow {
         bool removed;
         removed = remove_from_table(&_main_table, k);
         if ( removed ) {
             _main_table._length--;
-            ok = true;
             _stat.removes++;
-            return;
+            return true;
         }
 
         if (! _in_resize ) {
-            return;
+            return false;
         }
 
         removed = remove_from_table(&_resize_table, k);
         if ( removed ) {
             _resize_table._length--;
-            ok = true;
             _stat.removes++;
-            return;
+            return true;
         }
+        return false;
     }
 
     Stat stat() @safe @nogc pure nothrow {
@@ -307,34 +316,43 @@ struct HashMap(K, V, Allocator = Mallocator) {
 
 @safe unittest {
     import std.stdio;
+    import std.experimental.logger;
+    globalLogLevel = LogLevel.info;
+
     HashMap!(int, string) m;
-    bool ok, inserted;
-    string v;
-    m.put(1, "one", inserted);
-    assert(inserted);
-    v = m.get(1, ok);
-    assert(ok && v == "one");
-    v = m.get(2, ok, "abc");
-    assert(!ok && v == "abc");
+    bool ok;
+    auto u = m.put(1, "one");
+    assert(u.empty);
+    auto v = m.get(1);
+    assert(!v.empty && v == "one");
+    v = m.get(2);
+    assert(v.empty);
+    // try to replace 
+    u = m.put(1, "not one");
+    assert(!u.empty);
+    assert(u == "one");
     //m.clear();
 }
 
 @safe unittest {
     import std.format, std.stdio;
+    import std.experimental.logger;
+    globalLogLevel = LogLevel.info;
+
     // resize
     HashMap!(int, string) m;
     bool ok, inserted;
     foreach(i; 0..128) {
-        m.put(i, "%d".format(i), inserted);
+        m.put(i, "%d".format(i));
     }
     auto stat = m.stat;
     assert(stat.resizes == 1);
     assert(stat.puts == 128);
-    m.get(1, ok);
+    auto v = m.get(1);
     stat = m.stat;
     assert(stat.gets == 1);
     assert(stat.hits == 1);
-    m.put(1, "11", inserted);
+    m.put(1, "11");
     stat = m.stat;
     assert(stat.puts - stat.inserts == 1);
     m.clear();

@@ -4,7 +4,8 @@
     "Igor Khasilev"
   ],
   "dependencies": {
-    "stdx-allocator": "~>2"
+    "stdx-allocator": "~>2",
+    "optional": "~>0"
   },
   "buildTypes": {
     "debug": {
@@ -13,10 +14,24 @@
         "debugInfo"
       ],
       "dflags-dmd": [
-        "-g", "-gf"
+        "-g", "-gf", "-dip1000"
       ],
       "dflags-ldc": [
-        "-d-debug=requests"
+        "-d-debug=cachetools"
+      ]
+    },
+    "unittest": {
+      "buildOptions": [
+        "unittests", "debugMode", "debugInfo"
+      ],
+      "dflags-dmd": [
+        "-g", "-gf", "-dip1000"
+      ],
+      "dflags-ldc": [
+        "-d-debug=cachetools"
+      ],
+      "debugVersions": [
+        "cachetools"
       ]
     }
   },

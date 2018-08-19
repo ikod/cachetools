@@ -8,6 +8,110 @@ static void log(A...)(string fmt, A args) @nogc @trusted {
     printf(fmt.ptr, args);
 }
 
+struct DList(T, Allocator = Mallocator) {
+    this(this) @disable;
+    private {
+        struct _Node(T) {
+            T v;
+            _Node!T* next;
+            _Node!T* prev;
+        }
+        alias allocator = Allocator.instance;
+        _Node!T* _head;
+        _Node!T* _tail;
+        ulong   _length;
+    }
+    ulong length() const pure nothrow @safe @nogc {
+        return _length;
+    }
+    _Node!T* insert_last(T v) @safe @nogc nothrow {
+        auto n = make!(_Node!T)(allocator);
+        n.v = v;
+        if ( _tail is null )
+        {
+            _head = _tail = n;
+        }
+        else
+        {
+            n.prev = _tail;
+            _tail.next = n;
+            _tail = n;
+        }
+        _length++;
+        return n;
+    }
+    _Node!T* insert_first(T v) @safe @nogc nothrow
+    out
+    {
+        assert(_length>0);
+        assert(_head !is null && _tail !is null);
+    }
+    do 
+    {
+        auto n = make!(_Node!T)(allocator);
+        n.v = v;
+        if ( _head is null )
+        {
+            _head = _tail = n;
+        }
+        else
+        {
+            _head.prev = n;
+            n.next = _head;
+            _head = n;
+        }
+        _length++;
+        return n;
+    }
+    void remove(_Node!T* n) @safe @nogc nothrow 
+    in {assert(_length>0);}
+    do {
+        if ( n.prev ) {
+            n.prev.next = n.next;
+        }
+        if ( n.next ) {
+            n.next.prev = n.prev;
+        }
+        if ( n == _tail ) {
+            _tail = n.prev;
+        }
+        if ( n == _head ) {
+            _head = n.next;
+        }
+        (() @trusted {dispose(allocator, n);})();
+        _length--;
+    }
+    void move_to_tail(_Node!T* n) @safe @nogc nothrow
+    in
+    {
+        assert(_length > 0);
+        assert(_head !is null && _tail !is null);
+    }
+    do
+    {
+        if ( n == _tail ) {
+            return;
+        }
+        assert(n.next);
+        if ( _head == n ) {
+            _head = n.next;
+        } else {
+            n.prev.next = n.next;
+        }
+        // move this node to end
+        n.next.prev = n.prev;
+        n.next = null;
+        _tail = n;
+    }
+
+    _Node!T* head() @safe @nogc nothrow {
+        return _head;
+    }
+    _Node!T* tail() @safe @nogc nothrow {
+        return _tail;
+    }
+}
+
 struct SList(T, Allocator = Mallocator) {
     this(this) @disable;
 
@@ -167,4 +271,24 @@ struct SList(T, Allocator = Mallocator) {
     }
     assert(!removed);
     assert(l.length()==0);
+}
+
+@safe unittest {
+    DList!int dlist;
+    auto n1 = dlist.insert_last(1);
+    assert(dlist.length == 1);
+    dlist.remove(n1);
+    assert(dlist.length == 0);
+
+    n1 = dlist.insert_first(1);
+    assert(dlist.length == 1);
+    dlist.remove(n1);
+    assert(dlist.length == 0);
+
+    n1 = dlist.insert_first(1);
+    auto n2 = dlist.insert_last(2);
+    assert(dlist.length == 2);
+    dlist.move_to_tail(n1);
+    assert(dlist.head.v == 2);
+    assert(dlist.tail.v == 1);
 }

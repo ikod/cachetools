@@ -1,117 +1,120 @@
 module cachetools;
 
-public import cachetools.fifo;
+import optional;
+
 import cachetools.containers.hashmap;
 
-public class Cache(K, V) {
-    package {
-        int _size;
-    }
-    this(int s = 64) @nogc @safe nothrow {
-        _size = s;
-    }
-    void put(K k, V v) @nogc {}
-    ulong length() const @nogc {assert(false);}
+interface CachePolicy(K, V) {
+    void put(K, V) @safe @nogc;
+    Optional!V get(K) @safe @nogc;
+    bool remove(K) @safe @nogc;
+    void clear() @safe @nogc;
+    ulong length() const @safe @nogc;
 }
 
-public struct PolicyCache(K, V, P) {
-    P             policy;
-    HashMap!(K, V)  map;
-    ulong           size = 32;
+public struct Cache(K, V) {
+    private {
+        void delegate(K, V) @safe @nogc onRemoval;
+        CachePolicy!(K,V)     _policy;
+    }
 
-    this(ulong s, P p) {
-        policy = p;
-        size = s;
+    void policy(CachePolicy!(K,V) p) {
+        _policy = p;
+    }
+    this(CachePolicy!(K,V) p) {
+        _policy = p;
     }
     
     ~this() {
-        map.clear();
+        _policy.clear();
     }
-    void put(K k, V v) @nogc @safe nothrow {
-        bool inserted;
-        map.put(k, v, inserted);
-        if ( inserted )
-        {
-            policy.insert(k);
-        }
-        else 
-        {
-            policy.update(k);
-        }
-        if ( map.length() > size )
-        {
-            bool removed;
-            K eviction_key = policy.evict();
-            map.remove(eviction_key, removed);
-            if ( removed ) {
-                policy.remove(eviction_key);
-            }
-        }
+
+    void put(K k, V v) @nogc @safe {
+        _policy.put(k, v);
     }
-    V get(K k, out bool ok) @nogc @safe nothrow {
-        return map.get(k, ok);
+
+    Optional!V get(K k) @nogc @safe {
+        return _policy.get(k);
     }
-    void remove(K k) {
-        bool removed;
-        map.remove(k, removed);
-        if ( removed ) {
-            policy.remove(k);
-        }
+
+    bool remove(K k) {
+        return _policy.remove(k);
     }
+
     auto length() const @safe @nogc {
-        return map.length();
+        return _policy.length();
     }
 }
 
-auto makeCache(K, V, alias P)(ulong size) @safe @nogc {
-    P!K policy;
-    return PolicyCache!(K, V, P!K)(size, policy);
+auto makeCache(K, V)(CachePolicy!(K, V) p = null) @safe @nogc {
+    auto c = Cache!(K, V)();
+    if ( p !is null ) {
+        c.policy = p;
+    }
+    return c;
 }
 
 @safe unittest {
+    import cachetools.fifo;
     import std.stdio;
-    FIFOPolicy!int  policy;
-    bool ok;
-    string v;
-    auto c = makeCache!(int, string, FIFOPolicy)(2);
-    c.put(1, "one");
-    c.put(2, "two");
-    c.put(3, "three");
-    v = c.get(1, ok);
-    assert(!ok, "1 must be evicted");
-    c.put(1, "one-two");
-    c.put(1, "one-two-three");
-    v = c.get(1, ok);
-    assert(ok);
-    assert(v == "one-two-three");
-    v = c.get(2, ok); writefln("get 2 - %s(%s)", v, ok);
-    assert(!ok, "2 must be evicted by 3 and 1");
-    v = c.get(3, ok); writefln("get 3 - %s(%s)", v, ok);
-    assert(ok);
-    assert(v == "three");
-    v = c.get(4, ok); writefln("get 4 - %s(%s)", v, ok);
-    assert(!ok, "we never placed 4 into cache");
+    import std.experimental.logger;
+    
+    globalLogLevel = LogLevel.info;
+
+    FIFOPolicy!(int, string)  policy = new FIFOPolicy!(int, string);
+    () @nogc {
+        policy.size = 2;
+        bool ok;
+        Optional!string v;
+        auto c = makeCache!(int, string)(policy);
+        c.put(1, "one");
+        c.put(2, "two");
+        c.put(3, "three");
+        v = c.get(1);
+        assert(v.empty, "1 must be evicted");
+        c.put(1, "one-two");
+        c.put(1, "one-two-three");
+        v = c.get(1);
+        assert(!v.empty);
+        assert(v == "one-two-three");
+        v = c.get(2);
+        assert(v.empty, "2 must be evicted by 3 and 1");
+        v = c.get(3);
+        assert(!v.empty);
+        assert(v == "three");
+        v = c.get(4);
+        assert(v.empty, "we never placed 4 into cache");
+    }();
     import std.typecons;
     alias Tup = Tuple!(int, int);
-    auto c2 = makeCache!(Tup, string, FIFOPolicy)(2);
-    c2.put(Tup(1,1), "one");
-    c2.put(Tup(2,2), "two");
-    v = c2.get(Tup(1,1), ok); writefln("get (1,1) - %s(%s)", v, ok);
-    assert(ok);
-    assert(v == "one");
-    v = c2.get(Tup(2,2), ok);
-    assert(ok);
-    assert(v == "two");
-    v = c2.get(Tup(2,1), ok);
-    assert(!ok, "(2,1) not in cache");
-    c2.put(Tup(3,3), "three");
-    v = c2.get(Tup(1,1), ok);
-    assert(!ok, "(1,1) must be evicted");
-    auto c3 = makeCache!(int, int, FIFOPolicy)(64);
-    foreach(int i;0..1000) {
-        c3.put(i, i);
-    }
-    assert(c3.length == 64);
-    assert(c3.get(1000-64, ok)==1000-64 && ok);
-    assert(c3.get(999, ok)==999 && ok);
+    auto p2 = new FIFOPolicy!(Tup, string);
+    () @nogc {
+        p2.size = 2;
+        auto c2 = makeCache!(Tup, string)(p2);
+        c2.put(Tup(1,1), "one");
+        c2.put(Tup(2,2), "two");
+        auto v = c2.get(Tup(1,1));
+        assert(!v.empty);
+        assert(v == "one");
+        v = c2.get(Tup(2,2));
+        assert(!v.empty);
+        assert(v == "two");
+        v = c2.get(Tup(2,1));
+        assert(v.empty, "(2,1) not in cache");
+        c2.put(Tup(3,3), "three");
+        v = c2.get(Tup(1,1));
+        assert(v.empty, "(1,1) must be evicted");
+    }();
+
+    auto p3 = new FIFOPolicy!(int, int);
+    p3.size = 64;
+    () @nogc {
+        auto c3 = makeCache!(int, int)(p3);
+        foreach(int i;0..1000) {
+            c3.put(i, i);
+        }
+        assert(c3.length == 64);
+        assert(c3.get(1000-64)==1000-64);
+        assert(c3.get(999)==999);
+    }();
 }
