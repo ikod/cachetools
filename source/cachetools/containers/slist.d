@@ -10,22 +10,22 @@ static void log(A...)(string fmt, A args) @nogc @trusted {
 
 struct DList(T, Allocator = Mallocator) {
     this(this) @disable;
+    struct Node(T) {
+        T v;
+        Node!T* next;
+        Node!T* prev;
+    }
     private {
-        struct _Node(T) {
-            T v;
-            _Node!T* next;
-            _Node!T* prev;
-        }
         alias allocator = Allocator.instance;
-        _Node!T* _head;
-        _Node!T* _tail;
+        Node!T* _head;
+        Node!T* _tail;
         ulong   _length;
     }
     ulong length() const pure nothrow @safe @nogc {
         return _length;
     }
-    _Node!T* insert_last(T v) @safe @nogc nothrow {
-        auto n = make!(_Node!T)(allocator);
+    Node!T* insert_last(T v) @safe @nogc nothrow {
+        auto n = make!(Node!T)(allocator);
         n.v = v;
         if ( _tail is null )
         {
@@ -40,7 +40,7 @@ struct DList(T, Allocator = Mallocator) {
         _length++;
         return n;
     }
-    _Node!T* insert_first(T v) @safe @nogc nothrow
+    Node!T* insert_first(T v) @safe @nogc nothrow
     out
     {
         assert(_length>0);
@@ -48,7 +48,7 @@ struct DList(T, Allocator = Mallocator) {
     }
     do 
     {
-        auto n = make!(_Node!T)(allocator);
+        auto n = make!(Node!T)(allocator);
         n.v = v;
         if ( _head is null )
         {
@@ -63,7 +63,8 @@ struct DList(T, Allocator = Mallocator) {
         _length++;
         return n;
     }
-    void remove(_Node!T* n) @safe @nogc nothrow 
+
+    bool remove(Node!T* n) @safe @nogc nothrow 
     in {assert(_length>0);}
     do {
         if ( n.prev ) {
@@ -80,8 +81,10 @@ struct DList(T, Allocator = Mallocator) {
         }
         (() @trusted {dispose(allocator, n);})();
         _length--;
+        return true;
     }
-    void move_to_tail(_Node!T* n) @safe @nogc nothrow
+
+    void move_to_tail(Node!T* n) @safe @nogc nothrow
     in
     {
         assert(_length > 0);
@@ -104,10 +107,10 @@ struct DList(T, Allocator = Mallocator) {
         _tail = n;
     }
 
-    _Node!T* head() @safe @nogc nothrow {
+    Node!T* head() @safe @nogc nothrow {
         return _head;
     }
-    _Node!T* tail() @safe @nogc nothrow {
+    Node!T* tail() @safe @nogc nothrow {
         return _tail;
     }
 }

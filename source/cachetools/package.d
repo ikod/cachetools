@@ -54,7 +54,7 @@ auto makeCache(K, V)(CachePolicy!(K, V) p = null) @safe @nogc {
     return c;
 }
 
-@safe unittest {
+@safe version(None) unittest {
     import cachetools.fifo;
     import std.stdio;
     import std.experimental.logger;
