@@ -116,17 +116,13 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
     bool remove(K k) @safe @nogc {
         import std.conv;
         debug(cachetools) log("remove %d\n", k);
-        bool ok;
         auto n = nodes_map.get(k);
-        ok  = n.match!(
-            (DListNodeType* np) => nodes_map.remove(k) && nodes_list.remove(np) && main_map.remove(k),
+        bool ok  = n.match!(
+            (DListNodeType* np) => nodes_map.remove(k)
+                                    && nodes_list.remove(np)
+                                    && main_map.remove(k),
             () => false
         );
-        //if ( n == none ) {
-        //    return false;
-        //}
-        //auto np = n.front;
-        //ok = nodes_map.remove(k) && nodes_list.remove(np) && main_map.remove(k);
         return ok;
     }
 }

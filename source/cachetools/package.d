@@ -5,7 +5,9 @@ import optional;
 import cachetools.containers.hashmap;
 
 interface CachePolicy(K, V) {
+
     void put(K, V) @safe @nogc;
+
     Optional!V get(K) @safe @nogc;
     bool remove(K) @safe @nogc;
     void clear() @safe @nogc;
@@ -14,13 +16,13 @@ interface CachePolicy(K, V) {
 
 public struct Cache(K, V) {
     private {
-        void delegate(K, V) @safe @nogc onRemoval;
         CachePolicy!(K,V)     _policy;
     }
 
     void policy(CachePolicy!(K,V) p) {
         _policy = p;
     }
+
     this(CachePolicy!(K,V) p) {
         _policy = p;
     }
@@ -44,6 +46,7 @@ public struct Cache(K, V) {
     auto length() const @safe @nogc {
         return _policy.length();
     }
+
 }
 
 auto makeCache(K, V)(CachePolicy!(K, V) p = null) @safe @nogc {
