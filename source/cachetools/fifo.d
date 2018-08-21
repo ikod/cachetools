@@ -167,9 +167,9 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
     globalLogLevel = LogLevel.info;
 }
 
-class RemovedList(K, V): RemovedStream!(K, V) {
+class RemovedEntriesList(K, V): RemovedEntryListener!(K, V) {
     private {
-        SList!(RemovedStreamElement!(K, V)) list;
+        SList!(RemovedEntry!(K, V)) list;
         ulong _limit;
     }
 
@@ -185,11 +185,11 @@ class RemovedList(K, V): RemovedStream!(K, V) {
         if ( list.length == _limit) {
             assert(0, "You exceeded RemovedList limit");
         }
-        list.insertBack(RemovedStreamElement!(K, V)(k, v));
+        list.insertBack(RemovedEntry!(K, V)(k, v));
     }
 
     override 
-    RemovedStreamElement!(K, V) get() @safe @nogc
+    RemovedEntry!(K, V) get() @safe @nogc
     in { assert(!list.empty); }
     do {
         auto kv = list.front();
@@ -205,7 +205,7 @@ class RemovedList(K, V): RemovedStream!(K, V) {
 
 @safe unittest {
     import std.stdio;
-    auto r = new RemovedList!(int, string)(16);
+    auto r = new RemovedEntriesList!(int, string)(16);
     assert(r.empty);
 
     r.add(1, "one");
