@@ -7,7 +7,7 @@ private import stdx.allocator;
 private import stdx.allocator.mallocator : Mallocator;
 
 private import cachetools.hash;
-private import cachetools.containers.slist;
+private import cachetools.containers.lists;
 
 /// write to stdout
 static void log(A...)(string fmt, A args) @nogc @trusted {
@@ -309,6 +309,39 @@ struct HashMap(K, V, Allocator = Mallocator) {
         return false;
     }
 
+    V* opBinaryRight(string op)(K k) @safe @nogc if (op == "in") {
+        V* r;
+        immutable ulong computed_hash = hash_function(k);
+        _Table *t = &_main_table;
+        ulong hash = computed_hash % t._buckets_size;
+        auto chain = t._buckets[hash]._chain[];
+        foreach(nodep; chain) {
+            if (nodep.key == k) {
+                _stat.hits++;
+                r = &nodep.value;
+                break;
+            }
+        }
+        if ( !_in_resize ) {
+            return r;
+        }
+        //
+        do_resize_step();
+        //
+        t = &_resize_table;
+        hash = computed_hash % t._buckets_size;
+        chain = t._buckets[hash]._chain[];
+        foreach(nodep; chain) {
+            if (nodep.key == k) {
+                _stat.hits++;
+                r = &nodep.value;
+                break;
+            }
+        }
+        // notfound
+        return r;
+    }
+    
     Stat stat() @safe @nogc pure nothrow {
         return _stat;
     }
@@ -325,8 +358,10 @@ struct HashMap(K, V, Allocator = Mallocator) {
     assert(u.empty);
     auto v = m.get(1);
     assert(!v.empty && v == "one");
+    assert(1 in m);
     v = m.get(2);
     assert(v.empty);
+    assert(2 !in m);
     // try to replace 
     u = m.put(1, "not one");
     assert(!u.empty);

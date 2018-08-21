@@ -1,4 +1,4 @@
-module cachetools.containers.slist;
+module cachetools.containers.lists;
 
 private import stdx.allocator;
 private import stdx.allocator.mallocator : Mallocator;
@@ -21,6 +21,15 @@ struct DList(T, Allocator = Mallocator) {
         Node!T* _tail;
         ulong   _length;
     }
+
+    invariant {
+        assert
+        (
+            ( _length > 0 && _head !is null && _tail !is null) ||
+            ( _length == 0 && _tail is null && _tail is null)
+        );
+    }
+
     ulong length() const pure nothrow @safe @nogc {
         return _length;
     }
@@ -130,10 +139,22 @@ struct SList(T, Allocator = Mallocator) {
         _Node!T *_last;
     }
 
+    invariant {
+        assert
+        ( 
+            ( _length > 0 && _first !is null && _last !is null) ||
+            ( _length == 0 && _first is null && _last is null)
+        );
+    }
+
     ulong length() const pure @nogc @safe nothrow {
         return _length;
     }
 
+    bool empty() @nogc @safe const {
+        return _length == 0;
+    }
+    
     T front() pure @nogc @safe {
         return _first.v;
     }
@@ -142,11 +163,16 @@ struct SList(T, Allocator = Mallocator) {
         return _last.v;
     }
 
-    T popFront() @nogc @safe nothrow {
+    T popFront() @nogc @safe nothrow
+    in { assert(_first !is null); }
+    do {
         T v = _first.v;
         auto next = _first._next;
         (() @trusted {dispose(allocator, _first);})();
         _first = next;
+        if ( _first is null ) {
+            _last = null;
+        }
         _length--;
         return v;
     }
@@ -176,23 +202,31 @@ struct SList(T, Allocator = Mallocator) {
     auto range() {
         return Range!T(_first);
     }
-    void insertFront(T v) @nogc @safe nothrow {
+
+    void insertFront(T v) @nogc @safe nothrow
+    out{ assert(_first !is null && _last !is null);}
+    do {
         auto n = make!(_Node!T)(allocator);
         n.v = v;
         if ( _first !is null ) {
             n._next = _first;
         }
         _first = n;
+        if ( _last is null ) {
+            _last = n;
+        }
         _length++;
     }
 
-    void insertBack(T v) @nogc @safe nothrow {
+    void insertBack(T v) @nogc @safe nothrow
+    out{ assert(_first !is null && _last !is null);}
+    do {
         auto n = make!(_Node!T)(allocator);
         n.v = v;
         if ( _last !is null ) {
             _last._next = n;
         } else {
-            _first = n;            
+            _first = n;
         }
         _last = n;
         _length++;
@@ -274,6 +308,19 @@ struct SList(T, Allocator = Mallocator) {
     }
     assert(!removed);
     assert(l.length()==0);
+    auto l1 = SList!int();
+    foreach(i;0..100) {
+        l1.insertBack(i);
+    }
+    while(l.length) {
+        l1.popFront();
+    }
+    foreach(i;0..100) {
+        l1.insertFront(i);
+    }
+    while(l.length) {
+        l1.popFront();
+    }
 }
 
 @safe unittest {

@@ -1,8 +1,11 @@
 module cachetools.fifo;
 
-import cachetools;
+import cachetools.interfaces;
 import cachetools.containers.hashmap;
-import cachetools.containers.slist;
+import cachetools.containers.lists;
+
+import std.typecons;
+import std.exception;
 
 import optional;
 
@@ -28,8 +31,6 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
             K           key;
         }
         alias DListNodeType = DList!(ListNode).Node!(ListNode);
-        //ListNode*               head;
-        //ListNode*               tail;
         DList!(ListNode)            nodes_list;
         HashMap!(K, DListNodeType*) nodes_map;
         HashMap!(K, V)              main_map;
@@ -38,9 +39,11 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
 
         alias allocator = Allocator.instance;
     }
+
     public void size(ulong s) @nogc @safe {
         _size = s;
     }
+
     public void onRemoval(void delegate(K k, V v) @safe @nogc f) {
         _onRemoval = f;
     }
@@ -162,4 +165,60 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
         assert(!ok);
     }();
     globalLogLevel = LogLevel.info;
+}
+
+class RemovedList(K, V): RemovedStream!(K, V) {
+    private {
+        SList!(RemovedStreamElement!(K, V)) list;
+        ulong _limit;
+    }
+
+    this(ulong limit = 32) {
+        _limit = limit;
+        enforce!Exception(_limit >= 1);
+    }
+    
+    override void
+    add(K k, V v) @nogc @safe
+    out { assert(list.length < _limit);}
+    do  {
+        if ( list.length == _limit) {
+            assert(0, "You exceeded RemovedList limit");
+        }
+        list.insertBack(RemovedStreamElement!(K, V)(k, v));
+    }
+
+    override 
+    RemovedStreamElement!(K, V) get() @safe @nogc
+    in { assert(!list.empty); }
+    do {
+        auto kv = list.front();
+        list.popFront();
+        return kv;
+    }
+    
+    override bool
+    empty() @nogc @safe const {
+        return list.empty();
+    }
+}
+
+@safe unittest {
+    import std.stdio;
+    auto r = new RemovedList!(int, string)(16);
+    assert(r.empty);
+
+    r.add(1, "one");
+    assert(!r.empty);
+    auto e = r.get();
+    assert(e.key == 1 && e.value == "one");
+    assert(r.empty);
+    foreach(i; 0..14) {
+        r.add(i, "string");
+    }
+
+    while(!r.empty) {
+        auto v = r.get();
+        writeln(v);
+    }
 }

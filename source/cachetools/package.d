@@ -2,17 +2,8 @@ module cachetools;
 
 import optional;
 
+import cachetools.interfaces;
 import cachetools.containers.hashmap;
-
-interface CachePolicy(K, V) {
-
-    void put(K, V) @safe @nogc;
-
-    Optional!V get(K) @safe @nogc;
-    bool remove(K) @safe @nogc;
-    void clear() @safe @nogc;
-    ulong length() const @safe @nogc;
-}
 
 public struct Cache(K, V) {
     private {
