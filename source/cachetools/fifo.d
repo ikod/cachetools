@@ -70,7 +70,7 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
         assert(nodes_map.length == 0 && nodes_list.length == 0 && main_map.length == 0);
     }
 
-    Optional!V get(K k) {
+    Optional!V get(K k) @safe @nogc {
         return main_map.get(k);
     }
 
