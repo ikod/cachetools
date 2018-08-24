@@ -6,6 +6,7 @@ import cachetools.containers.lists;
 
 import std.typecons;
 import std.exception;
+import std.experimental.logger;
 
 import optional;
 
@@ -13,12 +14,6 @@ import optional;
 /// CacheFIFO contains exactly `size` items
 /// Replacement policy - evict oldest entry
 ///
-
-static void log(A...)(string fmt, A args) @nogc @trusted {
-    import core.stdc.stdio;
-    printf(fmt.ptr, args);
-}
-
 
 private import std.format;
 private import stdx.allocator;
@@ -107,7 +102,7 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
 
     void put(K k, V v) @safe @nogc
     do {
-        debug(cachetools) log("put %d\n", k);
+        debug(cachetools) tracef("put %d", k);
 
         auto u = main_map.put(k, CacheElement!V(v));
         //
@@ -135,7 +130,7 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
         // check if we have to purge something
         //
         if ( main_map.length > _maxLength ) {
-            debug(cachetools) log("evict, length before = %d, %d\n", main_map.length, nodes_map.length);
+            debug(cachetools) tracef("evict, length before = %d, %d\n", main_map.length, nodes_map.length);
             // ok purge head
             auto head = nodes_list.head;
             auto eviction_key = head.v.key;
@@ -161,7 +156,7 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
     }
     bool remove(K k) @safe @nogc {
         import std.conv;
-        debug(cachetools) log("remove %d\n", k);
+        debug(cachetools) tracef("remove %d", k);
         auto n = nodes_map.get(k);
         bool ok  = n.match!(
             (DListNodeType* np) => nodes_map.remove(k)
@@ -222,12 +217,12 @@ class RemovedEntriesList(K, V): RemovedEntryListener!(K, V) {
     add(K k, V v) @nogc @safe
         //out { assert(list.length < _limit);}
         do  {
-            debug(cachetools) log("insert into removed list (%d)%d\n", k, list.length);
+            debug(cachetools) tracef("insert into removed list (%d)%d", k, list.length);
             if ( list.length == _limit) {
                 assert(0, "You exceeded RemovedList limit");
             }
             list.insertBack(RemovedEntry!(K, V)(k, v));
-            debug(cachetools) log("inserted\n");
+            debug(cachetools) trace("inserted");
         }
 
         override 

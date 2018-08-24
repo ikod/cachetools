@@ -1,6 +1,8 @@
 module cachetools.containers.hashmap;
 
 import std.traits;
+import std.experimental.logger;
+
 import optional;
 
 private import stdx.allocator;
@@ -8,12 +10,6 @@ private import stdx.allocator.mallocator : Mallocator;
 
 private import cachetools.hash;
 private import cachetools.containers.lists;
-
-/// write to stdout
-static void log(A...)(string fmt, A args) @nogc @trusted {
-    import core.stdc.stdio : printf;
-    printf(fmt.ptr, args);
-}
 
 // K (key type) must be of value type without references.
 
@@ -90,7 +86,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
     /// 2. allocate new buckets array
     ///
     private void start_resize() @nogc @safe {
-        debug(cachetools) log("start resize from %d\n", _main_table._buckets_size);
+        debug(cachetools) tracef("start resize from %d\n", _main_table._buckets_size);
         _stat.resizes++;
         _in_resize = true;
         _resize_table._buckets_size = _main_table._buckets_size * 2;
@@ -103,33 +99,33 @@ struct HashMap(K, V, Allocator = Mallocator) {
         size_t bucket_index = 0;
         _Bucket* b = &_main_table._buckets[bucket_index];
         for(int i; i < resize_step && _main_table._length > 0; i++) {
-            debug(cachetools) log("resize_step\n");
+            debug(cachetools) trace("resize_step\n");
             while ( b._chain.length == 0 ) {
-                debug(cachetools) log("step to next bucket from %d\n", bucket_index);
+                debug(cachetools) trace("step to next bucket from %d\n", bucket_index);
                 bucket_index++;
                 if ( bucket_index >= _main_table._buckets_size ) {
                     assert(_main_table._length == 0);
                     stop_resize();
-                    debug(cachetools) log("done\n");
+                    debug(cachetools) trace("done\n");
                     return;
                 }
                 b = &_main_table._buckets[bucket_index];
             }
-            debug(cachetools) log("bucket length = %d\n", b._chain.length);
+            debug(cachetools) trace("bucket length = %d\n", b._chain.length);
             auto n = b._chain.front;
             b._chain.popFront;
             _main_table._length--;
             auto k = n.key;
             auto v = n.value;
             auto computed_hash = n.hash;
-            debug(cachetools) log("move key %d\n", k);
+            debug(cachetools) trace("move key %d\n", k);
             _Table *table = &_resize_table;
             _Node nn = _Node(computed_hash, k, v);
             hash_t h = computed_hash % table._buckets_size;
             table._buckets[h]._chain.insertFront(nn);
             table._length++;
         }
-        debug(cachetools) log("resize_step done\n");
+        debug(cachetools) trace("resize_step done\n");
         if ( _main_table._length == 0 ) {
             stop_resize();
         }
@@ -142,7 +138,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
     private void stop_resize() @nogc @safe {
         assert(_in_resize);
         assert(_main_table._length == 0);
-        debug(cachetools) log("stop resize\n");
+        debug(cachetools) trace("stop resize");
         _in_resize = false;
         // free old buckets array in main table
         (() @trusted {dispose(allocator, _main_table._buckets);})();
