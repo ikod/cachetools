@@ -14,7 +14,7 @@
         "debugInfo"
       ],
       "dflags-dmd": [
-        "-g", "-gf", "-dip1000"
+        "-g", "-gf", "-dip1000", "-dip1008"
       ],
       "dflags-ldc": [
         "-d-debug=cachetools"
@@ -25,7 +25,7 @@
         "unittests", "debugMode", "debugInfo"
       ],
       "dflags-dmd": [
-        "-g", "-gf", "-dip1000"
+        "-g", "-gf", "-dip1000", "-dip1008"
       ],
       "dflags-ldc": [
         "-d-debug=cachetools"

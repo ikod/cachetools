@@ -1,9 +1,11 @@
 module cachetools;
 
+public import cachetools.interfaces;
+import cachetools.containers.hashmap;
+
+
 import optional;
 
-import cachetools.interfaces;
-import cachetools.containers.hashmap;
 
 public struct Cache(K, V) {
     private {

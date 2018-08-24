@@ -36,10 +36,10 @@ template RemovedEntry(K, V) {
     alias RemovedEntry = Tuple!(K, "key", V, "value");
 }
 
-interface RemovedEntryListener(K, V) {
-    void add(K, V) @nogc @safe;
-    RemovedEntry!(K,V) get() @nogc @safe;
-    bool empty() const @nogc @safe;
+class RemovedEntryListener(K, V) {
+    void add(K, V) @nogc @safe {}
+    RemovedEntry!(K,V) get() @nogc @safe {return RemovedEntry!(K,V).init;}
+    bool empty() const @nogc @safe {return false;}
 }
 
 struct CacheElement(V) {
@@ -51,4 +51,11 @@ struct CacheElement(V) {
         //SysTime _updated;
         //SysTime _accessed;
     }
+    this(V value) {
+        _value = value;
+    }
+    @property
+        V value() const {
+            return _value;
+        }
 }
