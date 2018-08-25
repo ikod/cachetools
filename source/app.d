@@ -2,25 +2,49 @@ import std.stdio;
 import cachetools;
 import cachetools.fifo;
 import std.datetime.stopwatch;
+import std.random;
+import std.experimental.logger;
 
 CachePolicy!(int, int) p;
+int hits;
 
 static this() {
-    p = new FIFOPolicy!(int, int);
+    auto fifo = new FIFOPolicy!(int, int);
+    fifo.maxLength(5000);
+    p = fifo;
 }
 
-void f() @nogc @safe {
+immutable iterations = 10_000;
+
+void f() @safe {
+    debug(cachetools) info("next iteration");
     auto c = makeCache!(int, int);
+    auto rnd = Random(unpredictableSeed);
+
     c.policy = p;
-    foreach(i;0..10000) {
-        c.put(i,i);
+    foreach(i;0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        //writeln(k);
+        c.put(k,i);
+    }
+
+    foreach(_; 0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        auto v = c.get(k);
+        if ( !v.empty ) {
+            hits++;
+        }
     }
 }
 
+immutable trials = 10_000;
+
 void main()
 {
-    auto r = benchmark!(f)(10000);
+    globalLogLevel = LogLevel.trace;
+    auto r = benchmark!(f)(trials);
     writeln(r);
+    writefln("hit rate = %f%%", (1e2*hits)/(trials*10000));
 }
 
 /// $dub run --compiler=ldc2 --build release

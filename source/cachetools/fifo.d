@@ -70,7 +70,7 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
         // clear list and map
         while (nodes_list.length > 0) {
             auto ln = nodes_list.head;
-            ListNode l = ln.v;
+            ListNode l = ln.payload;
             K key = l.key;
             bool ok = 
                 nodes_list.remove(ln) &&
@@ -88,21 +88,17 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
     }
 
     Optional!V get(K k) @safe @nogc {
-        auto v = main_map.get(k);
-        if ( v.empty ) {
+        auto v = k in main_map;
+        if ( !v ) {
             return no!V;
         }
-        //
-        // check if this cacche element not expired
-        // and if expired - remove it from cache, return no!V
-        //
-        CacheElement!V ce = v.front;
-        return Optional!V(ce.value);
+        (*v)._hits++;
+        return Optional!V((*v).value);
     }
 
     void put(K k, V v) @safe @nogc
     do {
-        debug(cachetools) tracef("put %d", k);
+        debug(cachetools) tracef("put %s", k);
 
         auto u = main_map.put(k, CacheElement!V(v));
         //
@@ -112,6 +108,8 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
             // we replaced some node
             auto np = nodes_map.get(k);
             assert(!np.empty);
+            assert(np.front.payload.key == k);
+            // as key were updated - treate it as inserted
             nodes_list.move_to_tail(np.front);
             if ( _removedEntryListener !is null ) {
                 V old_value = u.front.value;
@@ -130,12 +128,13 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
         // check if we have to purge something
         //
         if ( main_map.length > _maxLength ) {
-            debug(cachetools) tracef("evict, length before = %d, %d\n", main_map.length, nodes_map.length);
+            debug(cachetools) tracef("evict, length before = %d, %d", main_map.length, nodes_map.length);
             // ok purge head
             auto head = nodes_list.head;
-            auto eviction_key = head.v.key;
+            auto eviction_key = head.payload.key;
             auto ev = main_map.get(eviction_key);
-            
+
+            debug(cachetools) tracef("eviction_key: %s", eviction_key);
 
             bool removed = nodes_map.remove(eviction_key);
             assert(removed);

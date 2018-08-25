@@ -50,7 +50,7 @@ auto makeCache(K, V)(CachePolicy!(K, V) p = null) @safe @nogc {
     return c;
 }
 
-@safe version(None) unittest {
+@safe unittest {
     import cachetools.fifo;
     import std.stdio;
     import std.experimental.logger;
@@ -59,7 +59,7 @@ auto makeCache(K, V)(CachePolicy!(K, V) p = null) @safe @nogc {
 
     FIFOPolicy!(int, string)  policy = new FIFOPolicy!(int, string);
     () @nogc {
-        policy.size = 2;
+        policy.maxLength(2);
         bool ok;
         Optional!string v;
         auto c = makeCache!(int, string)(policy);
@@ -85,7 +85,7 @@ auto makeCache(K, V)(CachePolicy!(K, V) p = null) @safe @nogc {
     alias Tup = Tuple!(int, int);
     auto p2 = new FIFOPolicy!(Tup, string);
     () @nogc {
-        p2.size = 2;
+        p2.maxLength(2);
         auto c2 = makeCache!(Tup, string)(p2);
         c2.put(Tup(1,1), "one");
         c2.put(Tup(2,2), "two");
@@ -103,7 +103,7 @@ auto makeCache(K, V)(CachePolicy!(K, V) p = null) @safe @nogc {
     }();
 
     auto p3 = new FIFOPolicy!(int, int);
-    p3.size = 64;
+    p3.maxLength(64);
     () @nogc {
         auto c3 = makeCache!(int, int)(p3);
         foreach(int i;0..1000) {

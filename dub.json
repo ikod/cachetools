@@ -18,6 +18,9 @@
       ],
       "dflags-ldc": [
         "-d-debug=cachetools"
+      ],
+      "debugVersions": [
+        "cachetools"
       ]
     },
     "unittest": {

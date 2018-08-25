@@ -43,7 +43,7 @@ class RemovedEntryListener(K, V) {
 }
 
 struct CacheElement(V) {
-    private {
+    package {
         V       _value;
         size_t  _size;
         ulong   _hits;

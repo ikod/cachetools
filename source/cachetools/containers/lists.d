@@ -2,18 +2,15 @@ module cachetools.containers.lists;
 
 private import stdx.allocator;
 private import stdx.allocator.mallocator : Mallocator;
-
-static void log(A...)(string fmt, A args) @nogc @trusted {
-    import core.stdc.stdio;
-    printf(fmt.ptr, args);
-}
+private import std.experimental.logger;
+private import std.format;
 
 struct DList(T, Allocator = Mallocator) {
     this(this) @disable;
     struct Node(T) {
-        T v;
-        Node!T* next;
-        Node!T* prev;
+        T payload;
+        private Node!T* prev;
+        private Node!T* next;
     }
     private {
         alias allocator = Allocator.instance;
@@ -26,26 +23,34 @@ struct DList(T, Allocator = Mallocator) {
         assert
         (
             ( _length > 0 && _head !is null && _tail !is null) ||
-            ( _length == 0 && _tail is null && _tail is null)
+            ( _length == 0 && _tail is null && _tail is null) ||
+            ( _length == 1 && _tail == _head && _head !is null ),
+            "length: %s, head: %s, tail: %s".format(_length, _head, _tail)
         );
     }
 
     ulong length() const pure nothrow @safe @nogc {
         return _length;
     }
-    Node!T* insert_last(T v) @safe @nogc nothrow {
+    Node!T* insert_last(T v) @safe @nogc nothrow
+    out
+    {
+        assert(_length>0);
+        assert(_head !is null && _tail !is null);
+    }
+    do
+    {
         auto n = make!(Node!T)(allocator);
-        n.v = v;
-        if ( _tail is null )
-        {
-            _head = _tail = n;
+        n.payload = v;
+        if ( _head is null ) {
+            _head = n;
         }
-        else
+        n.prev = _tail;
+        if ( _tail !is null )
         {
-            n.prev = _tail;
             _tail.next = n;
-            _tail = n;
         }
+        _tail = n;
         _length++;
         return n;
     }
@@ -58,22 +63,21 @@ struct DList(T, Allocator = Mallocator) {
     do 
     {
         auto n = make!(Node!T)(allocator);
-        n.v = v;
-        if ( _head is null )
-        {
-            _head = _tail = n;
+        n.payload = v;
+        if ( _tail is null ) {
+            _tail = n;
         }
-        else
+        n.next = _head;
+        if ( _head !is null )
         {
             _head.prev = n;
-            n.next = _head;
-            _head = n;
         }
+        _head = n;
         _length++;
         return n;
     }
 
-    bool remove(Node!T* n) @safe @nogc nothrow 
+    bool remove(Node!T* n) @safe @nogc
     in {assert(_length>0);}
     do {
         if ( n.prev ) {
@@ -93,27 +97,64 @@ struct DList(T, Allocator = Mallocator) {
         return true;
     }
 
-    void move_to_tail(Node!T* n) @safe @nogc nothrow
+    void move_to_tail(Node!T* n) @safe @nogc
     in
     {
         assert(_length > 0);
         assert(_head !is null && _tail !is null);
+    }
+    out {
+        assert(_tail == n && n.next is null);
     }
     do
     {
         if ( n == _tail ) {
             return;
         }
-        assert(n.next);
-        if ( _head == n ) {
+        // unlink
+        if ( n.prev is null )
+        {
             _head = n.next;
-        } else {
+        }
+        else
+        {
             n.prev.next = n.next;
         }
-        // move this node to end
-        n.next.prev = n.prev;
+        if ( n.next is null )
+        {
+            _tail = n.prev;
+        }
+        else
+        {
+            n.next.prev = n.prev;
+        }
+        // insert back
+        if ( _head is null ) {
+            _head = n;
+        }
+        n.prev = _tail;
+        if ( _tail !is null )
+        {
+            _tail.next = n;
+        }
         n.next = null;
         _tail = n;
+
+        ////debug(cachetools) tracef("n: %s".format(*n));
+        //assert(n.next !is null);
+        ////debug tracef("m-t-t: %s, tail: %s", *n, *_tail);
+        //assert(n.next, "non-tail entry have no 'next' pointer?");
+        //if ( _head == n ) {
+        //    assert(n.prev is null);
+        //    _head = n.next;
+        //} else {
+        //    n.prev.next = n.next;
+        //}
+        //// move this node to end
+        //n.next.prev = n.prev;
+        //n.next = null;
+        //tail.next = n;
+        //_tail = n;
     }
 
     Node!T* head() @safe @nogc nothrow {
@@ -276,35 +317,35 @@ struct SList(T, Allocator = Mallocator) {
     assert(l.length() == 1);
     l.insertBack(3);
     l.insertBack(4);
-    foreach(v; l[]){
-        log("v=%d\n", *v);
-    }
-    log("---\n");
+    //foreach(v; l[]){
+    //    log("v=%d\n", *v);
+    //}
+    //log("---\n");
     bool removed;
     removed = l.remove_by_predicate((n){return n==2;});
     foreach(v; l[]){
-        log("v=%d\n", *v);
+        //log("v=%d\n", *v);
     }
     assert(removed);
     assert(l.length()==2);
-    log("---\n");
+    //log("---\n");
     removed = l.remove_by_predicate((n){return n==4;});
     foreach(v; l[]){
-        log("v=%d\n", *v);
+        //log("v=%d\n", *v);
     }
     assert(removed);
     assert(l.length()==1);
-    log("---\n");
+    //log("---\n");
     removed = l.remove_by_predicate((n){return n==3;});
     foreach(v; l[]){
-        log("v=%d\n", *v);
+        //log("v=%d\n", *v);
     }
     assert(removed);
     assert(l.length()==0);
-    log("---\n");
+    //log("---\n");
     removed = l.remove_by_predicate((n){return n==3;});
     foreach(v; l[]){
-        log("v=%d\n", *v);
+        //log("v=%d\n", *v);
     }
     assert(!removed);
     assert(l.length()==0);
@@ -339,6 +380,6 @@ struct SList(T, Allocator = Mallocator) {
     auto n2 = dlist.insert_last(2);
     assert(dlist.length == 2);
     dlist.move_to_tail(n1);
-    assert(dlist.head.v == 2);
-    assert(dlist.tail.v == 1);
+    assert(dlist.head.payload == 2);
+    assert(dlist.tail.payload == 1);
 }

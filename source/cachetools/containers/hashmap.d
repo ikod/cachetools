@@ -2,6 +2,7 @@ module cachetools.containers.hashmap;
 
 import std.traits;
 import std.experimental.logger;
+import std.format;
 
 import optional;
 
@@ -86,12 +87,12 @@ struct HashMap(K, V, Allocator = Mallocator) {
     /// 2. allocate new buckets array
     ///
     private void start_resize() @nogc @safe {
-        debug(cachetools) tracef("start resize from %d\n", _main_table._buckets_size);
         _stat.resizes++;
         _in_resize = true;
         _resize_table._buckets_size = _main_table._buckets_size * 2;
         assert(_resize_table._buckets is null);
         _resize_table._buckets = makeArray!(_Bucket)(allocator, _resize_table._buckets_size);
+        debug(cachetools) tracef("start resize from %d to %d", _main_table._buckets_size, _resize_table._buckets_size);
     }
 
     private void do_resize_step() @nogc @safe {
@@ -99,9 +100,8 @@ struct HashMap(K, V, Allocator = Mallocator) {
         size_t bucket_index = 0;
         _Bucket* b = &_main_table._buckets[bucket_index];
         for(int i; i < resize_step && _main_table._length > 0; i++) {
-            debug(cachetools) trace("resize_step\n");
+            debug(cachetools) trace("resize_step");
             while ( b._chain.length == 0 ) {
-                debug(cachetools) trace("step to next bucket from %d\n", bucket_index);
                 bucket_index++;
                 if ( bucket_index >= _main_table._buckets_size ) {
                     assert(_main_table._length == 0);
@@ -111,21 +111,21 @@ struct HashMap(K, V, Allocator = Mallocator) {
                 }
                 b = &_main_table._buckets[bucket_index];
             }
-            debug(cachetools) trace("bucket length = %d\n", b._chain.length);
+            debug(cachetools) tracef("bucket length = %d", b._chain.length);
             auto n = b._chain.front;
             b._chain.popFront;
             _main_table._length--;
             auto k = n.key;
             auto v = n.value;
             auto computed_hash = n.hash;
-            debug(cachetools) trace("move key %d\n", k);
+            debug(cachetools) tracef("move key %d", k);
             _Table *table = &_resize_table;
             _Node nn = _Node(computed_hash, k, v);
             hash_t h = computed_hash % table._buckets_size;
             table._buckets[h]._chain.insertFront(nn);
             table._length++;
         }
-        debug(cachetools) trace("resize_step done\n");
+        debug(cachetools) trace("resize_step done");
         if ( _main_table._length == 0 ) {
             stop_resize();
         }
@@ -206,6 +206,11 @@ struct HashMap(K, V, Allocator = Mallocator) {
             _main_table._buckets_size = 32;
             _main_table._buckets = makeArray!(_Bucket)(allocator, _main_table._buckets_size);
         }
+
+        if ( _in_resize ) {
+            do_resize_step();
+        }
+
         auto r = no!V;
         _stat.gets++;
         immutable ulong computed_hash = hash_function(k);
@@ -222,9 +227,6 @@ struct HashMap(K, V, Allocator = Mallocator) {
         if ( !_in_resize ) {
             return r;
         }
-        //
-        do_resize_step();
-        //
         t = &_resize_table;
         hash = computed_hash % t._buckets_size;
         chain = t._buckets[hash]._chain[];
@@ -235,7 +237,43 @@ struct HashMap(K, V, Allocator = Mallocator) {
                 break;
             }
         }
-        // notfound
+        return r;
+    }
+
+    ///
+    /// return pointer to value if key present
+    ///
+    V* opBinaryRight(string op)(K k) @safe @nogc if (op == "in") {
+
+        if ( _in_resize ) {
+            do_resize_step();
+        }
+
+        V* r;
+        immutable ulong computed_hash = hash_function(k);
+        _Table *t = &_main_table;
+        ulong hash = computed_hash % t._buckets_size;
+        auto chain = t._buckets[hash]._chain[];
+        foreach(nodep; chain) {
+            if (nodep.key == k) {
+                _stat.hits++;
+                r = &nodep.value;
+                return r;
+            }
+        }
+        if ( !_in_resize ) {
+            return r;
+        }
+        t = &_resize_table;
+        hash = computed_hash % t._buckets_size;
+        chain = t._buckets[hash]._chain[];
+        foreach(nodep; chain) {
+            if (nodep.key == k) {
+                _stat.hits++;
+                r = &nodep.value;
+                return r;
+            }
+        }
         return r;
     }
 
@@ -283,7 +321,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         return no!V;
     }
 
-    bool remove(K k) @nogc @safe nothrow {
+    bool remove(K k) @nogc @safe {
         bool removed;
         removed = remove_from_table(&_main_table, k);
         if ( removed ) {
@@ -305,39 +343,6 @@ struct HashMap(K, V, Allocator = Mallocator) {
         return false;
     }
 
-    V* opBinaryRight(string op)(K k) @safe @nogc if (op == "in") {
-        V* r;
-        immutable ulong computed_hash = hash_function(k);
-        _Table *t = &_main_table;
-        ulong hash = computed_hash % t._buckets_size;
-        auto chain = t._buckets[hash]._chain[];
-        foreach(nodep; chain) {
-            if (nodep.key == k) {
-                _stat.hits++;
-                r = &nodep.value;
-                break;
-            }
-        }
-        if ( !_in_resize ) {
-            return r;
-        }
-        //
-        do_resize_step();
-        //
-        t = &_resize_table;
-        hash = computed_hash % t._buckets_size;
-        chain = t._buckets[hash]._chain[];
-        foreach(nodep; chain) {
-            if (nodep.key == k) {
-                _stat.hits++;
-                r = &nodep.value;
-                break;
-            }
-        }
-        // notfound
-        return r;
-    }
-    
     Stat stat() @safe @nogc pure nothrow {
         return _stat;
     }
