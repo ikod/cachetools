@@ -14,6 +14,9 @@ private import cachetools.containers.lists;
 
 // K (key type) must be of value type without references.
 
+enum initial_buckets_size = 32;
+enum grow_factor = 4;
+
 struct HashMap(K, V, Allocator = Mallocator) {
     /// Various statistics collector
     struct Stat {
@@ -38,7 +41,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         // (using new hash rows and hash calculatons) and then use this new table as main.
         // We do not transfer all items at once as it can take too much time. We transfer
         // 'resize_step' items on each iteration while there are any items in main table.
-        enum    resize_step = 10;
+        enum    resize_step = 1000;
 
         alias   allocator = Allocator.instance;
         alias   NodeT = _Node;
@@ -69,6 +72,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
             }
         }
         bool    _in_resize;
+        size_t  _in_resize_bucket_index;
         _Table  _main_table;
         _Table  _resize_table;
         Stat    _stat;
@@ -89,7 +93,8 @@ struct HashMap(K, V, Allocator = Mallocator) {
     private void start_resize() @nogc @safe {
         _stat.resizes++;
         _in_resize = true;
-        _resize_table._buckets_size = _main_table._buckets_size * 2;
+        _in_resize_bucket_index = 0;
+        _resize_table._buckets_size = _main_table._buckets_size * grow_factor;
         assert(_resize_table._buckets is null);
         _resize_table._buckets = makeArray!(_Bucket)(allocator, _resize_table._buckets_size);
         debug(cachetools) tracef("start resize from %d to %d", _main_table._buckets_size, _resize_table._buckets_size);
@@ -97,32 +102,27 @@ struct HashMap(K, V, Allocator = Mallocator) {
 
     private void do_resize_step() @nogc @safe {
         assert(_in_resize);
-        size_t bucket_index = 0;
-        _Bucket* b = &_main_table._buckets[bucket_index];
+        _Bucket* b = &_main_table._buckets[_in_resize_bucket_index];
         for(int i; i < resize_step && _main_table._length > 0; i++) {
             debug(cachetools) trace("resize_step");
             while ( b._chain.length == 0 ) {
-                bucket_index++;
-                if ( bucket_index >= _main_table._buckets_size ) {
+                _in_resize_bucket_index++;
+                if ( _in_resize_bucket_index >= _main_table._buckets_size ) {
                     assert(_main_table._length == 0);
                     stop_resize();
                     debug(cachetools) trace("done\n");
                     return;
                 }
-                b = &_main_table._buckets[bucket_index];
+                b = &_main_table._buckets[_in_resize_bucket_index];
             }
             debug(cachetools) tracef("bucket length = %d", b._chain.length);
             auto n = b._chain.front;
             b._chain.popFront;
             _main_table._length--;
-            auto k = n.key;
-            auto v = n.value;
             auto computed_hash = n.hash;
-            debug(cachetools) tracef("move key %d", k);
             _Table *table = &_resize_table;
-            _Node nn = _Node(computed_hash, k, v);
             hash_t h = computed_hash % table._buckets_size;
-            table._buckets[h]._chain.insertFront(nn);
+            table._buckets[h]._chain.insertFront(n);
             table._length++;
         }
         debug(cachetools) trace("resize_step done");
@@ -203,7 +203,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
 
     Optional!V get(K k) @safe @nogc {
         if ( _main_table._buckets_size == 0 ) {
-            _main_table._buckets_size = 32;
+            _main_table._buckets_size = initial_buckets_size;
             _main_table._buckets = makeArray!(_Bucket)(allocator, _main_table._buckets_size);
         }
 
@@ -246,7 +246,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
     V* opBinaryRight(string op)(K k) @safe @nogc if (op == "in") {
 
         if ( _main_table._buckets_size == 0 ) {
-            _main_table._buckets_size = 32;
+            _main_table._buckets_size = initial_buckets_size;
             _main_table._buckets = makeArray!(_Bucket)(allocator, _main_table._buckets_size);
         }
 
@@ -284,7 +284,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
 
     Optional!V put(K k, V v) @nogc @safe {
         if ( _main_table._buckets_size == 0 ) {
-            _main_table._buckets_size = 32;
+            _main_table._buckets_size = initial_buckets_size;
             _main_table._buckets = makeArray!(_Bucket)(allocator, _main_table._buckets_size);
         }
 

@@ -1,6 +1,7 @@
 import std.stdio;
 import cachetools;
 import cachetools.fifo;
+import cachetools.containers.hashmap;
 import std.datetime.stopwatch;
 import std.random;
 import std.experimental.logger;
@@ -8,16 +9,16 @@ import std.experimental.logger;
 CachePolicy!(int, int) p;
 int hits;
 
+immutable iterations = 1_000;
+
 static this() {
     auto fifo = new FIFOPolicy!(int, int);
-    fifo.maxLength(5000);
+    fifo.maxLength(iterations/2);
     p = fifo;
 }
 
-immutable iterations = 10_000;
 
 void f() @safe {
-    debug(cachetools) info("next iteration");
     auto c = makeCache!(int, int);
     auto rnd = Random(unpredictableSeed);
 
@@ -37,14 +38,60 @@ void f() @safe {
     }
 }
 
-immutable trials = 10_000;
+void f_AA() @safe {
+    int[int] c;
+    auto rnd = Random(unpredictableSeed);
+
+    foreach(i;0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        c[k] = i;
+    }
+
+    foreach(_; 0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        auto v = k in c;
+        if ( v ) {
+            hits++;
+        }
+    }
+}
+
+void f_hashmap() @safe {
+    HashMap!(int, int) c;
+    auto rnd = Random(unpredictableSeed);
+
+    foreach(i;0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        c.put(k, i);
+    }
+
+    foreach(_; 0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        auto v = k in c;
+        if ( v ) {
+            hits++;
+        }
+    }
+}
+
+immutable trials = 100;
 
 void main()
 {
-    globalLogLevel = LogLevel.trace;
+    globalLogLevel = LogLevel.info;
     auto r = benchmark!(f)(trials);
     writeln(r);
-    writefln("hit rate = %f%%", (1e2*hits)/(trials*10000));
+    writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
+
+    hits = 0;
+    r = benchmark!(f_AA)(trials);
+    writeln(r);
+    writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
+
+    hits = 0;
+    r = benchmark!(f_hashmap)(trials);
+    writeln(r);
+    writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
 }
 
 /// $dub run --compiler=ldc2 --build release

@@ -195,7 +195,7 @@ struct SList(T, Allocator = Mallocator) {
     bool empty() @nogc @safe const {
         return _length == 0;
     }
-    
+
     T front() pure @nogc @safe {
         return _first.v;
     }

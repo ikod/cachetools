@@ -99,7 +99,7 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
     }
 
     void handle_removal(K k, V v) @safe @nogc {
-        if ( _removedEntryListener !is null ) {
+        if ( _removedEntryListener ) {
             _removedEntryListener.add(k, v);
         }
     }
