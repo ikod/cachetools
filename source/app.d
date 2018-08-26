@@ -68,3 +68,8 @@ void main()
 /// after refactoring
 /// Igors-MacBook-Pro:cachetools igor$ ./cachetools
 ///[37 secs, 913 ms, 325 μs, and 8 hnsecs]
+
+/// 26.08.2018 - FIFO policy: 'second chance' implemented, removed list_map
+/// test of random put/get
+/// [30 secs, 329 ms, 307 μs, and 8 hnsecs]
+/// hit rate = 49.996496%

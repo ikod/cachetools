@@ -19,17 +19,35 @@ private import std.format;
 private import stdx.allocator;
 private import stdx.allocator.mallocator : Mallocator;
 
-
 class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
     private {
+        alias DListNodeType = DList!(ListNode).Node!(ListNode);
+
+        struct CacheElement(V) {
+            package {
+                V               _value;
+                size_t          _size;
+                DListNodeType*  _list_node;
+                //SysTime _created;
+                //SysTime _updated;
+                //SysTime _accessed;
+            }
+
+            @property
+            V value() const {
+                return _value;
+            }
+        }
+
         alias allocator = Allocator.instance;
 
         struct ListNode {
-            K key;
+            K       key;
+            ulong   _hits;
+            bool    _rbit;
         }
-        alias DListNodeType = DList!(ListNode).Node!(ListNode);
-        DList!(ListNode)            nodes_list;
-        HashMap!(K, DListNodeType*) nodes_map;
+
+        DList!(ListNode)            main_list;
         HashMap!(K, CacheElement!V) main_map;
 
         RemovedEntryListener!(K, V) _removedEntryListener;
@@ -62,23 +80,22 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
     }
 
     invariant {
-        assert(nodes_list.length  == nodes_map.length && nodes_list.length == main_map.length);
+        assert(main_list.length == main_map.length);
         assert(_maxLength >= main_map.length, "expected _size>=_map.length, %s>=%s".format(_maxLength, main_map.length));
     }
 
     void clear() @safe @nogc {
         // clear list and map
-        while (nodes_list.length > 0) {
-            auto ln = nodes_list.head;
+        while (main_list.length > 0) {
+            auto ln = main_list.head;
             ListNode l = ln.payload;
             K key = l.key;
             bool ok = 
-                nodes_list.remove(ln) &&
-                nodes_map.remove(key) &&
+                main_list.remove(ln) &&
                 main_map.remove(key);
             assert(ok);
         }
-        assert(nodes_map.length == 0 && nodes_list.length == 0 && main_map.length == 0);
+        assert(main_list.length == 0 && main_map.length == 0);
     }
 
     void handle_removal(K k, V v) @safe @nogc {
@@ -88,11 +105,14 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
     }
 
     Optional!V get(K k) @safe @nogc {
+        debug(cachetools) tracef("get %s", k);
         auto v = k in main_map;
         if ( !v ) {
             return no!V;
         }
-        (*v)._hits++;
+        auto list_pointer = v._list_node;
+        list_pointer.payload._hits++;
+        list_pointer.payload._rbit = true;
         return Optional!V((*v).value);
     }
 
@@ -100,45 +120,46 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
     do {
         debug(cachetools) tracef("put %s", k);
 
-        auto u = main_map.put(k, CacheElement!V(v));
-        //
-        // u is Optional!V which is not empty if we replaced old entry
-        //
-        if ( !u.empty ) {
-            // we replaced some node
-            auto np = nodes_map.get(k);
-            assert(!np.empty);
-            assert(np.front.payload.key == k);
-            // as key were updated - treate it as inserted
-            nodes_list.move_to_tail(np.front);
-            if ( _removedEntryListener !is null ) {
-                V old_value = u.front.value;
-                handle_removal(k, old_value);
+        if ( auto cep = k in main_map ) {
+            // update old node
+            if ( _removedEntryListener ) {
+                handle_removal(k, cep._value);
             }
+            cep._value = v;
+            auto node_pointer = cep._list_node;
+            main_list.move_to_tail(node_pointer);
         }
         else
         {
-            // we inserted new node
+            // insert new node
             ListNode new_node = {key: k};
-            auto np = nodes_list.insert_last(new_node);
-            auto i = nodes_map.put(k, np);
-            assert(i.empty, "Key was not in main map, but is in the nodes map");
+            auto node_pointer = main_list.insert_last(new_node);
+            CacheElement!(V) ce = {
+                _value:v,
+                _list_node: node_pointer
+            };
+            auto u = main_map.put(k, ce);
+            assert(u.empty);
         }
         //
         // check if we have to purge something
         //
         if ( main_map.length > _maxLength ) {
-            debug(cachetools) tracef("evict, length before = %d, %d", main_map.length, nodes_map.length);
+            debug(cachetools) tracef("evict, length before = %d", main_map.length);
             // ok purge head
-            auto head = nodes_list.head;
+            auto head = main_list.head;
+            while ( head.payload._rbit ) {
+                debug(cachetools) tracef("second chance for key %s", head.payload.key);
+                head.payload._rbit = false;
+                main_list.move_to_tail(head);
+                head = main_list.head;
+            }
             auto eviction_key = head.payload.key;
             auto ev = main_map.get(eviction_key);
 
             debug(cachetools) tracef("eviction_key: %s", eviction_key);
 
-            bool removed = nodes_map.remove(eviction_key);
-            assert(removed);
-            removed = nodes_list.remove(head);
+            bool removed = main_list.remove(head);
             assert(removed);
             removed = main_map.remove(eviction_key);
             assert(removed);
@@ -150,19 +171,20 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
             }
         }
     }
+
     ulong length() const @nogc @safe {
-        return nodes_map.length();
+        return main_list.length();
     }
+
     bool remove(K k) @safe @nogc {
-        import std.conv;
         debug(cachetools) tracef("remove %d", k);
-        auto n = nodes_map.get(k);
-        bool ok  = n.match!(
-            (DListNodeType* np) => nodes_map.remove(k)
-                                    && nodes_list.remove(np)
-                                    && main_map.remove(k),
-            () => false
-        );
+
+        auto cep = k in main_map;
+        if ( !cep ) {
+            return false;
+        }
+        auto np = cep._list_node;
+        bool ok = main_list.remove(np) && main_map.remove(k);
         return ok;
     }
 }
@@ -171,7 +193,7 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
     import std.experimental.logger;
     import std.format;
 
-    globalLogLevel = LogLevel.trace;
+    globalLogLevel = LogLevel.info;
     bool ok;
     FIFOPolicy!(int, string) policy = new FIFOPolicy!(int, string);
 
@@ -191,7 +213,8 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
         assert(policy.length == 3);
         policy.put(4, "four");
         assert(policy.length == 3);
-        v = policy.get(1);
+        // oldest key '1' saved by 'second chance algorithm', next to remove - '2'
+        v = policy.get(2);
         assert(v.empty);
         ok = policy.remove(4);
         assert(ok);

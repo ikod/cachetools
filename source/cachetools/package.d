@@ -92,16 +92,17 @@ auto makeCache(K, V)(CachePolicy!(K, V) p = null) @safe @nogc {
         auto v = c2.get(Tup(1,1));
         assert(!v.empty);
         assert(v == "one");
-        v = c2.get(Tup(2,2));
-        assert(!v.empty);
-        assert(v == "two");
+        //v = c2.get(Tup(2,2));
+        //assert(!v.empty);
+        //assert(v == "two");
         v = c2.get(Tup(2,1));
         assert(v.empty, "(2,1) not in cache");
         c2.put(Tup(3,3), "three");
-        v = c2.get(Tup(1,1));
-        assert(v.empty, "(1,1) must be evicted");
+        v = c2.get(Tup(2,2));
+        assert(v.empty, "(2,2) must be evicted by second chance algorithm");
     }();
 
+    globalLogLevel = LogLevel.info;
     auto p3 = new FIFOPolicy!(int, int);
     p3.maxLength(64);
     () @nogc {

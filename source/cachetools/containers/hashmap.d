@@ -245,6 +245,11 @@ struct HashMap(K, V, Allocator = Mallocator) {
     ///
     V* opBinaryRight(string op)(K k) @safe @nogc if (op == "in") {
 
+        if ( _main_table._buckets_size == 0 ) {
+            _main_table._buckets_size = 32;
+            _main_table._buckets = makeArray!(_Bucket)(allocator, _main_table._buckets_size);
+        }
+
         if ( _in_resize ) {
             do_resize_step();
         }
