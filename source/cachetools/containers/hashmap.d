@@ -173,7 +173,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         t._buckets_size = 0;
     }
 
-    /// retturn true if removed from table, false otherwise
+    /// return true if removed from table, false otherwise
     private bool remove_from_table(_Table* t, K k) @nogc @safe nothrow {
         bool removed;
         immutable ulong computed_hash = hash_function(k);
@@ -189,14 +189,14 @@ struct HashMap(K, V, Allocator = Mallocator) {
         immutable ulong hash = computed_hash % t._buckets_size;
 
         Optional!V r;
-        auto chain = t._buckets[hash]._chain[];
-        foreach(nodep; chain) {
-            if (nodep.key == k) {
-                // key found, replace. all done
-                r = nodep.value;
-                nodep.value = v;
+        auto np = t._buckets[hash]._chain._first;
+        while ( np ) {
+            if (np.v.key == k) {
+                r = np.v.value;
+                np.v.value = v;
                 break;
             }
+            np = np._next;
         }
         return r;
     }
@@ -254,32 +254,31 @@ struct HashMap(K, V, Allocator = Mallocator) {
             do_resize_step();
         }
 
-        V* r;
         immutable ulong computed_hash = hash_function(k);
         _Table *t = &_main_table;
         ulong hash = computed_hash % t._buckets_size;
-        auto chain = t._buckets[hash]._chain[];
-        foreach(nodep; chain) {
-            if (nodep.key == k) {
+        auto np = t._buckets[hash]._chain._first;
+        while (np) {
+            if (np.v.key == k) {
                 _stat.hits++;
-                r = &nodep.value;
-                return r;
+                return &np.v.value;
             }
+            np = np._next;
         }
         if ( !_in_resize ) {
-            return r;
+            return null;
         }
         t = &_resize_table;
         hash = computed_hash % t._buckets_size;
-        chain = t._buckets[hash]._chain[];
-        foreach(nodep; chain) {
-            if (nodep.key == k) {
+        np = t._buckets[hash]._chain._first;
+        while (np) {
+            if (np.v.key == k) {
                 _stat.hits++;
-                r = &nodep.value;
-                return r;
+                return &np.v.value;
             }
+            np = np._next;
         }
-        return r;
+        return null;
     }
 
     Optional!V put(K k, V v) @nogc @safe {
@@ -415,4 +414,539 @@ struct HashMap(K, V, Allocator = Mallocator) {
     auto x = new A();
     auto y = new A();
     //HashMap!(A, string) dict;
+}
+
+package bool SmallValueFootprint(V)() {
+    import std.traits;
+    static if (
+           isNumeric!V
+        || isSomeString!V
+        || isSomeChar!V
+        || isPointer!V )
+    {
+            return true;
+    }
+    else static if (
+           is(V == struct) && V.sizeof <= (void*).sizeof )
+    {
+            return true;
+    }
+    else static if (
+            is(V == class ) && __traits(classInstanceSize, V) <= (void*).sizeof)
+    {
+        return true;
+    }
+    else
+        return false;
+}
+
+struct OAHashMap(K, V, Allocator = Mallocator) {
+
+    enum initial_buckets_num = 32;
+    enum inlineValues = false;//SmallValueFootprint!V();
+
+    enum overload_threshold = 0.6;
+    enum deleted_threshold = 0.2;
+
+    private {
+        alias   allocator = Allocator.instance;
+        enum    EMPTY = 0;
+        enum    DELETED = 1;
+        enum    ALLOCATED = 2;
+        struct  _Bucket {
+            int     type; // EMPTY, DELETED or ALLOCATED
+            hash_t  hash;
+            K       key;
+            static if (inlineValues)
+            {
+                V   value;
+            }
+            else
+            {
+                V*  value_ptr;
+            }
+            string toString() {
+                import std.format;
+                static if (inlineValues) {
+                    return "%s, key: %s, value: %s".format(
+                        [0:"free", 1:"deleted", 2:"allocated"][type],
+                        key, value);
+                } else {
+                    return "%s, key: %s, value: %s".format(
+                        [0:"free", 1:"deleted", 2:"allocated"][type],
+                        key,
+                        value_ptr !is null?  format("%s", *value_ptr) : "-");
+                }
+            }
+        }
+        int         _buckets_num;
+        _Bucket[]   _buckets;
+        int         _allocated;
+        int         _deleted;
+        int         _empty;
+    }
+
+    ~this() @safe {
+        if ( _buckets_num > 0 ) {
+            static if ( !inlineValues ) {
+                for(int i=0;i<_buckets_num;i++) {
+                    auto t = _buckets[i].type;
+                    if ( t == DELETED || t == EMPTY ) {
+                        continue;
+                    }
+                    (() @trusted {dispose(allocator, _buckets[i].value_ptr);})();
+                }
+            }
+            (() @trusted {dispose(allocator, _buckets);})();
+        }
+    }
+    invariant {
+        assert(_allocated>=0 && _deleted>=0 && _empty >= 0);
+        assert(_allocated + _deleted + _empty == _buckets_num, "a:%s + d:%s + e:%s != total: %s".format(_allocated, _deleted,  _empty, _buckets_num));
+    }
+
+    package long findEmptyIndex(const long start_index) pure const @safe {
+        long index = start_index;
+
+        do {
+            () @nogc {debug(cachetools) tracef("test index %d for nonALLOCATED", index);}();
+            auto t = _buckets[index].type;
+            if ( t != ALLOCATED ) {
+                return index;
+            }
+            index = ++index % _buckets_num;
+        } while(index != start_index);
+
+        return -1;
+    }
+
+    package long findEntryIndex(const long start_index, const hash_t hash, in K key) pure const @safe {
+        long index = start_index;
+
+        do {
+            immutable t = _buckets[index].type;
+
+            () @nogc {debug(cachetools) tracef("test entry index %d (%s) for key %s", index, _buckets[index], key);}();
+
+            if ( t == EMPTY ) {
+                break;
+            }
+
+            immutable h = _buckets[index].hash;
+            if ( t == ALLOCATED && h == hash && _buckets[index].key == key ) {
+                () @nogc {debug(cachetools) tracef("test entry index %d for key %s - success", index, key);}();
+                return index;
+            }
+            index = ++index % _buckets_num;
+        } while(index != start_index);
+        return -1;
+    }
+
+
+    package long findUpdateIndex(const long start_index, const hash_t hash, in K key) pure @safe {
+        long index = start_index;
+
+        do {
+            immutable t = _buckets[index].type;
+
+            () @nogc {debug(cachetools) tracef("test update index %d (%s) for key %s", index, _buckets[index], key);}();
+
+            if ( t == EMPTY || t == DELETED ) {
+                () @nogc {debug(cachetools) tracef("test update index %d (%s) for key %s - success", index, _buckets[index], key);}();
+                return index;
+            }
+
+            immutable h = _buckets[index].hash;
+            if ( t == ALLOCATED && h == hash && _buckets[index].key == key ) 
+            {
+                () @nogc {debug(cachetools) tracef("test update index %d (%s) for key %s - success", index, _buckets[index], key);}();
+                return index;
+            }
+            index = ++index % _buckets_num;
+        } while(index != start_index);
+        return -1;
+    }
+
+    package long findUpdateIndexExtended(const long start_index, in ref _Bucket[] buckets, int buckets_num) pure @safe {
+        long index = start_index;
+
+        do {
+            immutable t = buckets[index].type;
+            
+            if ( t == EMPTY || t == DELETED )
+            {
+                return index;
+            }
+
+            index = ++index % buckets_num;
+        } while(index != start_index);
+        return -1;
+    }
+
+    V* opBinaryRight(string op)(in K k) @safe if (op == "in") {
+        immutable computed_hash = hash_function(k);
+        immutable start_index = computed_hash % _buckets_num;
+        immutable lookup_index = findEntryIndex(start_index, computed_hash, k);
+        if ( lookup_index == -1) {
+            return null;
+        }
+        static if ( inlineValues )
+        {
+            return &_buckets[lookup_index].value;
+        }
+        else
+        {
+            return _buckets[lookup_index].value_ptr;
+        }
+    }
+
+    bool tooMuchDeleted() @safe @nogc {
+        if ( (1.0*_deleted) / _buckets_num > deleted_threshold ) {
+            return true;
+        }
+        return false;
+    }
+
+    bool tooHighLoad() @safe @nogc {
+        if ( (1.0*_allocated) / _buckets_num > overload_threshold ) {
+            return true;
+        }
+        return false;
+    }
+
+    void doResize(int dest) @safe {
+        int _new_buckets_num = dest;
+        int _new_allocated = 0;
+        _Bucket[] _new_buckets = makeArray!(_Bucket)(allocator, _new_buckets_num);
+        // iterate over entries
+        () @nogc {debug(cachetools) trace("start resizing");}();
+        () @nogc {debug(cachetools) tracef("start resizing: old loadfactor: %s", (1.0*_allocated) / _buckets_num);}();
+        for(int i=0;i<_buckets_num;i++) {
+            auto t = _buckets[i].type;
+            if ( t == DELETED || t == EMPTY ) {
+                continue;
+            }
+            auto h = _buckets[i].hash;
+
+            long start_index = h % _new_buckets_num;
+            long new_position = findUpdateIndexExtended(start_index, _new_buckets, _new_buckets_num);
+            assert( new_position >= 0 );
+            assert(_new_buckets[new_position].type == EMPTY );
+
+            _new_buckets[new_position] = _buckets[i];
+            _new_allocated++;
+        }
+        (() @trusted {dispose(allocator, _buckets);})();
+        _buckets = _new_buckets;
+        _buckets_num = _new_buckets_num;
+        _allocated = _new_allocated;
+        _deleted = 0;
+        _empty = _buckets_num - _allocated;
+        () @nogc {debug(cachetools) trace("resizing done");}();
+        () @nogc {debug(cachetools) tracef("resizing done: new loadfactor: %s", (1.0*_allocated) / _buckets_num);}();
+    }
+
+    alias put = putOld;
+
+    bool putOld(K k, V v) @safe {
+        if ( !_buckets_num ) {
+            _buckets_num = _empty = initial_buckets_num;
+            _buckets = makeArray!(_Bucket)(allocator, _buckets_num);
+        }
+
+        () @nogc {debug(cachetools) tracef("put k: %s, v: %s", k,v);}();
+
+        if ( tooHighLoad ) {
+            doResize(8*_buckets_num);
+        }
+
+        if ( tooMuchDeleted ) {
+            doResize(_buckets_num);
+        }
+
+
+        immutable computed_hash = hash_function(k);
+        long start_index = computed_hash % _buckets_num;
+        long placement_index = findUpdateIndex(start_index, computed_hash, k);
+        assert(placement_index >= 0);
+
+        () @nogc {debug(cachetools) tracef("start_index: %d, placement_index: %d", start_index, placement_index);}();
+
+        static if ( inlineValues )
+        {
+            () @nogc {debug(cachetools) tracef("place inline buckets[%d] '%s'='%s'", placement_index, k, v);}();
+            _buckets[placement_index].value = v;
+        }
+        else
+        {
+            () @nogc {debug(cachetools) tracef("place with allocation buckets[%d] '%s'='%s'", placement_index, k, v);}();
+            if (_buckets[placement_index].type == ALLOCATED )
+            {
+                *(_buckets[placement_index].value_ptr) = v;
+            }
+            else
+            {
+                auto p = make!(V)(allocator);
+                *p = v;
+                _buckets[placement_index].value_ptr = p;
+            }
+        }
+        _buckets[placement_index].type = ALLOCATED;
+        _buckets[placement_index].hash = computed_hash;
+        _buckets[placement_index].key = k;
+        _allocated++;
+        _empty--;
+        return true;
+    }
+
+    bool putRobinHood(K k, V v) @safe {
+        //
+        // RobinHood hashing
+        //
+
+        import std.algorithm.mutation: swap;
+        if ( !_buckets_num ) {
+            _buckets_num = _empty = initial_buckets_num;
+            _buckets = makeArray!(_Bucket)(allocator, _buckets_num);
+        }
+
+        () @nogc {debug(cachetools) tracef("robinhood put k: %s, v: %s", k,v);}();
+
+        if ( tooHighLoad ) {
+            doResize(2*_buckets_num);
+        }
+
+        if ( tooMuchDeleted ) {
+            doResize(_buckets_num);
+        }
+
+        auto computed_hash = hash_function(k);
+        long start_index = computed_hash % _buckets_num;
+        long placement_index = start_index;
+
+        static if (!inlineValues) {
+            auto value_ptr = make!(V)(allocator);
+            *value_ptr = v;
+        }
+
+        do {
+            () @nogc {debug(cachetools) tracef("test bucket[%d] = %s", placement_index, _buckets[placement_index]);}();
+
+            immutable b_type = _buckets[placement_index].type;
+            if ( b_type == EMPTY ) {
+                break;
+            }
+            immutable b_hash = _buckets[placement_index].hash;
+            auto b_key = _buckets[placement_index].key;
+            if ( b_type == ALLOCATED && computed_hash == b_hash && k == b_key ) {
+                break;
+            }
+
+            immutable b_ideal_index = b_hash % _buckets_num;
+            immutable his_distance = (placement_index - b_ideal_index) % _buckets_num;
+            immutable my_distance =   (placement_index - start_index) % _buckets_num;
+
+            () @nogc {debug(cachetools) tracef("put k: %s, v: %s, his_distance: %d, my_distance: %d", k, v, his_distance, my_distance);}();
+
+            if ( my_distance > his_distance )
+            {
+                // do swap
+                () @nogc {debug(cachetools) tracef("swapping key %s with key %s", k, b_key);}();
+
+                swap(k, _buckets[placement_index].key);
+                swap(computed_hash, _buckets[placement_index].hash);
+                //swap(start_index, b_ideal_index);
+                static if ( inlineValues ) {
+                    swap(v, _buckets[placement_index].value);
+                }
+                else
+                {
+                    swap(value_ptr, _buckets[placement_index].value_ptr);
+                }
+                () @nogc {debug(cachetools) tracef("after swap bucket[%d] = %s", placement_index, _buckets[placement_index]);}();
+            }
+            placement_index = ++placement_index % _buckets_num;
+            assert(placement_index != start_index, "table full");
+        } while (true);
+
+        //long placement_index = findUpdateIndex(start_index, computed_hash, k);
+        assert(placement_index >= 0);
+
+        () @nogc {debug(cachetools) tracef("key: %s, start_index: %d, placement_index: %d", k, start_index, placement_index);}();
+
+        _buckets[placement_index].type = ALLOCATED;
+        _buckets[placement_index].hash = computed_hash;
+        _buckets[placement_index].key = k;
+        static if ( inlineValues )
+        {
+            () @nogc {debug(cachetools) tracef("place inline buckets[%d] '%s'='%s'", placement_index, k, v);}();
+            _buckets[placement_index].value = v;
+        }
+        else
+        {
+            () @nogc {debug(cachetools) tracef("place with allocation buckets[%d] '%s'='%s'", placement_index, k, v);}();
+            auto p = make!(V)(allocator);
+            *p = v;
+            _buckets[placement_index].value_ptr = p;
+        }
+        _allocated++;
+        _empty--;
+        return true;
+    }
+
+    bool remove(K k) @safe {
+
+        () @nogc {debug(cachetools) tracef("remove k: %s", k);}();
+
+        immutable computed_hash = hash_function(k);
+        immutable start_index = computed_hash % _buckets_num;
+        immutable lookup_index = findEntryIndex(start_index, computed_hash, k);
+        if ( lookup_index == -1) {
+            return false;
+        }
+        assert(_buckets[lookup_index].type == ALLOCATED, "tried to remove non allocated bucket");
+
+        static if ( inlineValues )
+        {
+            // what we have to do with removed values XXX?
+        }
+        else
+        {
+            // what we have to do with removed values XXX?
+            // free space
+            (() @trusted {dispose(allocator, _buckets[lookup_index].value_ptr);})();
+            _buckets[lookup_index].value_ptr = null;
+        }
+        
+        long next_index = (lookup_index + 1) % _buckets_num;
+        // if next bucket is free we can convert all DELETED buckets down staring from current to EMPTY buckets
+        if ( _buckets[next_index].type == EMPTY )
+        {
+            _buckets[lookup_index].type = EMPTY;
+            _allocated--;
+            _empty++;
+            auto free_index = (lookup_index - 1) % _buckets_num;
+            while (free_index != lookup_index) {
+                if ( _buckets[free_index].type != DELETED ) {
+                    break;
+                }
+                _buckets[free_index].type = EMPTY;
+                _deleted--;
+                _empty++;
+                free_index = (free_index - 1) % _buckets_num;
+            }
+            assert(free_index != lookup_index, "table full of deleted buckets?");
+        }
+        else
+        {
+            _buckets[lookup_index].type = DELETED;
+            _deleted++;
+            _allocated--;
+        }
+        return true;
+    }
+}
+
+@safe unittest {
+    globalLogLevel = LogLevel.trace;
+    () @nogc {
+        OAHashMap!(int, int) int2int;
+        foreach(i; 1..5) {
+            int2int.put(i,i);
+        }
+        int2int.put(33,33); // <- follow key 1, move key 2 on pos 3
+        assert(1 in int2int, "1 not in hash");
+        assert(2 in int2int, "2 not in hash");
+        assert(1 in int2int, "3 not in hash");
+        assert(4 in int2int, "4 not in hash");
+        assert(33 in int2int, "33 not in hash");
+        int2int.remove(33);
+        int2int.put(2,2); // <- must replace key 2 on pos 3
+        assert(2 in int2int, "2 not in hash");
+    }();
+    () @nogc {
+        struct LargeStruct {
+            ulong a;
+            ulong b;
+        }
+        OAHashMap!(int, LargeStruct) int2ls;
+        foreach(i; 1..5) {
+            int2ls.put(i,LargeStruct(i,i));
+        }
+        int2ls.put(33,LargeStruct(33,33)); // <- follow key 1, move key 2 on pos 3
+        assert(1 in int2ls, "1 not in hash");
+        assert(2 in int2ls, "2 not in hash");
+        assert(1 in int2ls, "3 not in hash");
+        assert(4 in int2ls, "4 not in hash");
+        assert(33 in int2ls, "33 not in hash");
+        int2ls.remove(33);
+        int2ls.put(2,LargeStruct(2,2)); // <- must replace key 2 on pos 3
+        assert(2 in int2ls, "2 not in hash");
+    }();
+}
+
+@safe unittest {
+    globalLogLevel = LogLevel.info;
+    () @nogc {
+        assert(SmallValueFootprint!int());
+        assert(SmallValueFootprint!double());
+        struct SmallStruct {
+            ulong a;
+        }
+        assert(SmallValueFootprint!SmallStruct);
+        struct LargeStruct {
+            ulong a;
+            ulong b;
+        }
+        assert(!SmallValueFootprint!LargeStruct);
+        class SmallClass {
+            ulong a;
+        }
+        assert(!SmallValueFootprint!SmallClass);
+
+        OAHashMap!(int, string) int2string;
+        auto u = int2string.put(1, "one");
+        assert(int2string.findEmptyIndex(1) == 2);
+        assert(int2string.findUpdateIndex(1, 1, 1) == 1);
+        {
+            auto v = 1 in int2string;
+            assert(v !is null);
+            assert(*v == "one");
+        }
+        assert(2 !in int2string);
+        u = int2string.put(32+1, "33");
+        assert(33 in int2string);
+        assert(int2string.findUpdateIndex(1, hash_function(33), 33) == 2);
+        assert(int2string.remove(33));
+        assert(!int2string.remove(33));
+        
+        OAHashMap!(int, LargeStruct) int2LagreStruct;
+        u = int2LagreStruct.put(1, LargeStruct(1,2));
+        assert(int2LagreStruct.findEmptyIndex(1) == 2);
+        {
+            auto v = 1 in int2LagreStruct;
+            assert(v !is null);
+            assert(*v == LargeStruct(1, 2));
+        }
+    }();
+
+    globalLogLevel = LogLevel.info;
+}
+
+@safe unittest {
+    globalLogLevel = LogLevel.info;
+    static int i;
+    () {
+        struct LargeStruct {
+            ulong a;
+            ulong b;
+            ~this() @safe {
+                i++;
+            }
+        }
+        OAHashMap!(int, LargeStruct) int2LagreStruct;
+        int2LagreStruct.put(1, LargeStruct(1,2));
+    }();
+    assert(i == 3, "i=%d".format(i));
+    globalLogLevel = LogLevel.info;
 }

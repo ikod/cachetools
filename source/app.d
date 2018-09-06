@@ -9,7 +9,11 @@ import std.experimental.logger;
 CachePolicy!(int, int) p;
 int hits;
 
-immutable iterations = 1_000;
+//immutable iterations = 10_000;
+//immutable trials = 10_000;
+immutable iterations = 400_000;
+immutable trials = 2;
+
 
 static this() {
     auto fifo = new FIFOPolicy!(int, int);
@@ -17,6 +21,12 @@ static this() {
     p = fifo;
 }
 
+struct Large {
+    long a;
+    long b;
+    long c;
+    long d;
+}
 
 void f() @safe {
     auto c = makeCache!(int, int);
@@ -56,6 +66,24 @@ void f_AA() @safe {
     }
 }
 
+void f_AA_large() @safe {
+    Large[int] c;
+    auto rnd = Random(unpredictableSeed);
+
+    foreach(i;0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        c[k] = Large(i,i);
+    }
+
+    foreach(_; 0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        auto v = k in c;
+        if ( v ) {
+            hits++;
+        }
+    }
+}
+
 void f_hashmap() @safe {
     HashMap!(int, int) c;
     auto rnd = Random(unpredictableSeed);
@@ -74,23 +102,73 @@ void f_hashmap() @safe {
     }
 }
 
-immutable trials = 100;
+void f_oahashmap() @safe {
+    OAHashMap!(int, int) c;
+    auto rnd = Random(unpredictableSeed);
+
+    foreach(i;0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        c.put(k, i);
+    }
+
+    foreach(_; 0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        auto v = k in c;
+        if ( v ) {
+            hits++;
+        }
+    }
+}
+
+void f_oahashmap_Large() @safe {
+    OAHashMap!(int, Large) c;
+    auto rnd = Random(unpredictableSeed);
+
+    foreach(i;0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        c.put(k, Large(i,i));
+    }
+
+    foreach(_; 0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        auto v = k in c;
+        if ( v ) {
+            hits++;
+        }
+    }
+}
 
 void main()
 {
     globalLogLevel = LogLevel.info;
-    auto r = benchmark!(f)(trials);
-    writeln(r);
+    //auto r0 = benchmark!(f)(trials);
+    //writeln("cache ", r0);
+    //writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
+    //
+
+    hits = 0;
+    auto r1 = benchmark!(f_AA)(trials);
+    writeln("AA!(int,int)     ", r1);
+    writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
+
+    //hits = 0;
+    //auto r2 = benchmark!(f_hashmap)(trials);
+    //writeln("hash!(int,int) ", r2);
+    //writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
+    //
+    hits = 0;
+    auto r3 = benchmark!(f_oahashmap)(trials);
+    writeln("oahash!(int,int) ", r3);
     writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
 
     hits = 0;
-    r = benchmark!(f_AA)(trials);
-    writeln(r);
+    auto r4 = benchmark!(f_AA_large)(trials);
+    writeln("AA large         ", r4);
     writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
 
     hits = 0;
-    r = benchmark!(f_hashmap)(trials);
-    writeln(r);
+    auto r5 = benchmark!(f_oahashmap_Large)(trials);
+    writeln("oahash large     ", r5);
     writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
 }
 

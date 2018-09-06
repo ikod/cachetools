@@ -36,6 +36,20 @@
       "debugVersions": [
         "cachetools"
       ]
+    },
+    "profile": {
+      "buildOptions": [
+        "profile", "optimize", "inline", "debugInfo"
+      ],
+      "dflags-dmd": [
+        "-g", "-gf", "-dip1000", "-dip1008", "-release"
+      ],
+      "dflags-ldc": [
+        "-d-debug=cachetools"
+      ],
+      "debugVersions": [
+        "cachetools"
+      ]
     }
   },
   "sourcePaths": ["source"],

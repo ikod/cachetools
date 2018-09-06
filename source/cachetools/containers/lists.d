@@ -168,7 +168,7 @@ struct DList(T, Allocator = Mallocator) {
 struct SList(T, Allocator = Mallocator) {
     this(this) @disable;
 
-    private {
+    package {
         struct _Node(T) {
             T v;
             _Node!T *_next;
