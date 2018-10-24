@@ -12,7 +12,7 @@ int hits;
 //immutable iterations = 10_000;
 //immutable trials = 10_000;
 immutable iterations = 400_000;
-immutable trials = 2;
+immutable trials = 1;
 
 
 static this() {
@@ -26,6 +26,27 @@ struct Large {
     long b;
     long c;
     long d;
+}
+
+class LargeClass {
+    long a;
+    long b;
+    long c;
+    long d;
+    this(LargeClass other) @safe
+    {
+        a = other.a;
+        b = other.b;
+        c = other.c;
+        d = other.d;
+    }
+    this(long a, long b, long c, long d) @safe
+    {
+        a = a;
+        b = b;
+        c = c;
+        d = d;
+    }
 }
 
 void f() @safe {
@@ -73,6 +94,24 @@ void f_AA_large() @safe {
     foreach(i;0..iterations) {
         int k = uniform(0, iterations, rnd);
         c[k] = Large(i,i);
+    }
+
+    foreach(_; 0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        auto v = k in c;
+        if ( v ) {
+            hits++;
+        }
+    }
+}
+
+void f_AA_largeClass() @safe {
+    LargeClass[int] c;
+    auto rnd = Random(unpredictableSeed);
+
+    foreach(i;0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        c[k] = new LargeClass(i, i, i, i);
     }
 
     foreach(_; 0..iterations) {
@@ -137,6 +176,24 @@ void f_oahashmap_Large() @safe {
         }
     }
 }
+
+//void f_oahashmap_LargeClass() @safe {
+//    OAHashMap!(int, LargeClass) c;
+//    auto rnd = Random(unpredictableSeed);
+//
+//    foreach(i;0..iterations) {
+//        int k = uniform(0, iterations, rnd);
+//        c.put(k, Large(i,i));
+//    }
+//
+//    foreach(_; 0..iterations) {
+//        int k = uniform(0, iterations, rnd);
+//        auto v = k in c;
+//        if ( v ) {
+//            hits++;
+//        }
+//    }
+//}
 
 void main()
 {

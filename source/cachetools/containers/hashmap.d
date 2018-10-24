@@ -416,6 +416,10 @@ struct HashMap(K, V, Allocator = Mallocator) {
     //HashMap!(A, string) dict;
 }
 
+///
+/// Return true if it is worth to store values inline in hash table
+/// V footprint should be small enough
+///
 package bool SmallValueFootprint(V)() {
     import std.traits;
     static if (
@@ -443,7 +447,7 @@ package bool SmallValueFootprint(V)() {
 struct OAHashMap(K, V, Allocator = Mallocator) {
 
     enum initial_buckets_num = 32;
-    enum inlineValues = false;//SmallValueFootprint!V();
+    enum inlineValues = SmallValueFootprint!V();
 
     enum overload_threshold = 0.6;
     enum deleted_threshold = 0.2;
@@ -936,11 +940,11 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
 @safe unittest {
     globalLogLevel = LogLevel.info;
     static int i;
-    () {
+    () @safe @nogc {
         struct LargeStruct {
             ulong a;
             ulong b;
-            ~this() @safe {
+            ~this() @safe @nogc {
                 i++;
             }
         }
