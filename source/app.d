@@ -159,6 +159,25 @@ void f_oahashmap() @safe {
     }
 }
 
+void f_oahashmapGC() @safe {
+    import std.experimental.allocator.gc_allocator;
+    OAHashMap!(int, int, GCAllocator) c;
+    auto rnd = Random(unpredictableSeed);
+
+    foreach(i;0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        c.put(k, i);
+    }
+
+    foreach(_; 0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        auto v = k in c;
+        if ( v ) {
+            hits++;
+        }
+    }
+}
+
 void f_oahashmap_Large() @safe {
     OAHashMap!(int, Large) c;
     auto rnd = Random(unpredictableSeed);
@@ -177,23 +196,78 @@ void f_oahashmap_Large() @safe {
     }
 }
 
-//void f_oahashmap_LargeClass() @safe {
-//    OAHashMap!(int, LargeClass) c;
-//    auto rnd = Random(unpredictableSeed);
-//
-//    foreach(i;0..iterations) {
-//        int k = uniform(0, iterations, rnd);
-//        c.put(k, Large(i,i));
-//    }
-//
-//    foreach(_; 0..iterations) {
-//        int k = uniform(0, iterations, rnd);
-//        auto v = k in c;
-//        if ( v ) {
-//            hits++;
-//        }
-//    }
-//}
+void f_oahashmap_Large_GCAllocator() @safe {
+    import std.experimental.allocator.gc_allocator;
+    OAHashMap!(int, Large, GCAllocator) c;
+    auto rnd = Random(unpredictableSeed);
+
+    foreach(i;0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        c.put(k, Large(i,i));
+    }
+
+    foreach(_; 0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        auto v = k in c;
+        if ( v ) {
+            hits++;
+        }
+    }
+}
+
+void f_oahashmap_LargeClass() @safe {
+    OAHashMap!(int, LargeClass) c;
+    auto rnd = Random(unpredictableSeed);
+
+    foreach(i;0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        c.put(k, new LargeClass(i,i,i,i));
+    }
+
+    foreach(_; 0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        auto v = k in c;
+        if ( v ) {
+            hits++;
+        }
+    }
+}
+void f_oahashmap_LargeClassGC() @safe {
+    import std.experimental.allocator.gc_allocator;
+
+    OAHashMap!(int, LargeClass,GCAllocator) c;
+    auto rnd = Random(unpredictableSeed);
+
+    foreach(i;0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        c.put(k, new LargeClass(i,i,i,i));
+    }
+
+    foreach(_; 0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        auto v = k in c;
+        if ( v ) {
+            hits++;
+        }
+    }
+}
+void f_AA_LargeClass() @safe {
+    LargeClass[int] c;
+    auto rnd = Random(unpredictableSeed);
+
+    foreach(i;0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        c[k] = new LargeClass(i,i,i,i);
+    }
+
+    foreach(_; 0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        auto v = k in c;
+        if ( v ) {
+            hits++;
+        }
+    }
+}
 
 void main()
 {
@@ -205,28 +279,51 @@ void main()
 
     hits = 0;
     auto r1 = benchmark!(f_AA)(trials);
-    writeln("AA!(int,int)     ", r1);
-    writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
-
-    //hits = 0;
-    //auto r2 = benchmark!(f_hashmap)(trials);
-    //writeln("hash!(int,int) ", r2);
+    writeln("AA!(int,int)    ", r1);
     //writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
-    //
+
     hits = 0;
     auto r3 = benchmark!(f_oahashmap)(trials);
-    writeln("oahash!(int,int) ", r3);
-    writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
+    writeln("OA!(int,int)    ", r3);
+    //writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
+    hits = 0;
+    auto r31 = benchmark!(f_oahashmapGC)(trials);
+    writeln("OA!(int,int) GC ", r31);
 
+    writeln("---");
+    
     hits = 0;
     auto r4 = benchmark!(f_AA_large)(trials);
-    writeln("AA large         ", r4);
-    writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
+    writeln("AA large        ", r4);
+    //writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
 
     hits = 0;
     auto r5 = benchmark!(f_oahashmap_Large)(trials);
-    writeln("oahash large     ", r5);
-    writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
+    writeln("OA large        ", r5);
+    //writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
+
+    hits = 0;
+    auto r51 = benchmark!(f_oahashmap_Large_GCAllocator)(trials);
+    writeln("OA large GC     ", r51);
+    //writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
+    writeln("---");
+
+
+    hits = 0;
+    auto r6 = benchmark!(f_AA_LargeClass)(trials);
+    writeln("AA largeClass   ", r6);
+    //writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
+
+    hits = 0;
+    auto r7 = benchmark!(f_oahashmap_LargeClass)(trials);
+    writeln("OA largeClass   ", r7);
+    //writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
+    hits = 0;
+
+    auto r71 = benchmark!(f_oahashmap_LargeClassGC)(trials);
+    writeln("OA largeClassGC ", r71);
+    //writefln("hit rate = %f%%", (1e2*hits)/(trials*iterations));
+    writeln("---");
 }
 
 /// $dub run --compiler=ldc2 --build release
