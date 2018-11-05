@@ -48,7 +48,7 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
         }
 
         DList!(ListNode)            main_list;
-        HashMap!(K, CacheElement!V) main_map;
+        OAHashMap!(K, CacheElement!V) main_map;
 
         RemovedEntryListener!(K, V) _removedEntryListener;
 

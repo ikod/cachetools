@@ -3,6 +3,8 @@ module cachetools.containers.hashmap;
 import std.traits;
 import std.experimental.logger;
 import std.format;
+import std.typecons;
+import core.memory;
 
 import optional;
 
@@ -14,391 +16,391 @@ private import cachetools.containers.lists;
 
 // K (key type) must be of value type without references.
 
-enum initial_buckets_size = 32;
-enum grow_factor = 4;
+enum initial_buckets_size = 139;
+enum grow_factor = 2;
 
-struct HashMap(K, V, Allocator = Mallocator) {
-    /// Various statistics collector
-    struct Stat {
-        ulong   gets;             /// # of get() calls
-        ulong   puts;             /// # of put() calls
-        ulong   hits;
-        ulong   inserts;
-        ulong   removes;
-        ulong   resizes;
-        size_t  key_space;
-        size_t  value_space;
-    }
-
-    private {
-        // resize load_factor.
-        // Trigger for resize.
-        // if load factor (num of elements in hash table divide hash rows) reach resize_load_factor then we 
-        // start resize process
-        enum    resize_load_factor = 3.0;
-        // resize_step.
-        // during resize we have to transfer all items from main table to 'resize' table 
-        // (using new hash rows and hash calculatons) and then use this new table as main.
-        // We do not transfer all items at once as it can take too much time. We transfer
-        // 'resize_step' items on each iteration while there are any items in main table.
-        enum    resize_step = 1000;
-
-        alias   allocator = Allocator.instance;
-        alias   NodeT = _Node;
-        struct _Node {
-            // node of the chain in bucket
-            hash_t  hash;
-            K       key;
-            V       value;
-        }
-        struct _Bucket {
-            // hash bucket 
-            SList!_Node _chain;
-        }
-        struct _Table {
-            ulong     _length;          // entries in table
-            ulong     _buckets_size;    // buckets in table
-            _Bucket[] _buckets;
-
-            float load_factor() const pure @safe @nogc nothrow {
-                if ( _length == 0 || _buckets_size == 0 ) {
-                    return 0.0;
-                }
-                return float(_length)/_buckets_size;
-            }
-
-            bool overloaded() const @safe @nogc nothrow pure {
-                return load_factor() > resize_load_factor;
-            }
-        }
-        bool    _in_resize;
-        size_t  _in_resize_bucket_index;
-        _Table  _main_table;
-        _Table  _resize_table;
-        Stat    _stat;
-    }
-
-    ~this() @safe @nogc {
-        clear();
-    }
-
-    invariant {
-        assert(_in_resize ? _resize_table._buckets_size > 0 : _resize_table._buckets_size == 0);
-    }
-    ///
-    /// We detected that it's time to resize.
-    /// 1. calculate new buckets_size
-    /// 2. allocate new buckets array
-    ///
-    private void start_resize() @nogc @safe {
-        _stat.resizes++;
-        _in_resize = true;
-        _in_resize_bucket_index = 0;
-        _resize_table._buckets_size = _main_table._buckets_size * grow_factor;
-        assert(_resize_table._buckets is null);
-        _resize_table._buckets = makeArray!(_Bucket)(allocator, _resize_table._buckets_size);
-        debug(cachetools) tracef("start resize from %d to %d", _main_table._buckets_size, _resize_table._buckets_size);
-    }
-
-    private void do_resize_step() @nogc @safe {
-        assert(_in_resize);
-        _Bucket* b = &_main_table._buckets[_in_resize_bucket_index];
-        for(int i; i < resize_step && _main_table._length > 0; i++) {
-            debug(cachetools) trace("resize_step");
-            while ( b._chain.length == 0 ) {
-                _in_resize_bucket_index++;
-                if ( _in_resize_bucket_index >= _main_table._buckets_size ) {
-                    assert(_main_table._length == 0);
-                    stop_resize();
-                    debug(cachetools) trace("done\n");
-                    return;
-                }
-                b = &_main_table._buckets[_in_resize_bucket_index];
-            }
-            debug(cachetools) tracef("bucket length = %d", b._chain.length);
-            auto n = b._chain.front;
-            b._chain.popFront;
-            _main_table._length--;
-            auto computed_hash = n.hash;
-            _Table *table = &_resize_table;
-            hash_t h = computed_hash % table._buckets_size;
-            table._buckets[h]._chain.insertFront(n);
-            table._length++;
-        }
-        debug(cachetools) trace("resize_step done");
-        if ( _main_table._length == 0 ) {
-            stop_resize();
-        }
-    }
-
-    ///
-    /// All elements transfered to 'resize' table.
-    /// free anything from main table and 'swap' content of main and resize tables
-    /// 
-    private void stop_resize() @nogc @safe {
-        assert(_in_resize);
-        assert(_main_table._length == 0);
-        debug(cachetools) trace("stop resize");
-        _in_resize = false;
-        // free old buckets array in main table
-        (() @trusted {dispose(allocator, _main_table._buckets);})();
-        // transfer everything from resize table to main table
-        _main_table._length = _resize_table._length;
-        _main_table._buckets = _resize_table._buckets;
-        // initialize resize_table
-        _main_table._buckets_size = _resize_table._buckets_size;
-        _resize_table = _Table.init;
-    }
-
-    ulong length() const pure @nogc @safe {
-        return _main_table._length + _resize_table._length;
-    }
-
-    void clear() @nogc @safe {
-        clear_table(&_main_table);
-        clear_table(&_resize_table);
-        _stat = Stat.init;
-    }
-
-    private void clear_table(_Table* t) @nogc @safe nothrow {
-        if ( t._buckets is null ) {
-            return;
-        }
-        foreach(ref b; t._buckets) {
-            b._chain.clear();
-        }
-        (() @trusted {dispose(allocator, t._buckets);})();
-        t._length = 0;
-        t._buckets = null;
-        t._buckets_size = 0;
-    }
-
-    /// return true if removed from table, false otherwise
-    private bool remove_from_table(_Table* t, K k) @nogc @safe nothrow {
-        bool removed;
-        immutable ulong computed_hash = hash_function(k);
-        immutable ulong hash = computed_hash % t._buckets_size;
-
-        auto bucket = &t._buckets[hash];
-        removed = bucket._chain.remove_by_predicate((n) @nogc {return n.key==k;});
-        return removed;
-    }
-
-    /// return true if updated in table
-    private Optional!V update_in_table(_Table* t, K k, V v, hash_t computed_hash) @nogc @safe {
-        immutable ulong hash = computed_hash % t._buckets_size;
-
-        Optional!V r;
-        auto np = t._buckets[hash]._chain._first;
-        while ( np ) {
-            if (np.v.key == k) {
-                r = np.v.value;
-                np.v.value = v;
-                break;
-            }
-            np = np._next;
-        }
-        return r;
-    }
-
-    Optional!V get(K k) @safe @nogc {
-        if ( _main_table._buckets_size == 0 ) {
-            _main_table._buckets_size = initial_buckets_size;
-            _main_table._buckets = makeArray!(_Bucket)(allocator, _main_table._buckets_size);
-        }
-
-        if ( _in_resize ) {
-            do_resize_step();
-        }
-
-        auto r = no!V;
-        _stat.gets++;
-        immutable ulong computed_hash = hash_function(k);
-        _Table *t = &_main_table;
-        ulong hash = computed_hash % t._buckets_size;
-        auto chain = t._buckets[hash]._chain[];
-        foreach(nodep; chain) {
-            if (nodep.key == k) {
-                _stat.hits++;
-                r = nodep.value;
-                break;
-            }
-        }
-        if ( !_in_resize ) {
-            return r;
-        }
-        t = &_resize_table;
-        hash = computed_hash % t._buckets_size;
-        chain = t._buckets[hash]._chain[];
-        foreach(nodep; chain) {
-            if (nodep.key == k) {
-                _stat.hits++;
-                r = nodep.value;
-                break;
-            }
-        }
-        return r;
-    }
-
-    ///
-    /// return pointer to value if key present
-    ///
-    V* opBinaryRight(string op)(K k) @safe @nogc if (op == "in") {
-
-        if ( _main_table._buckets_size == 0 ) {
-            _main_table._buckets_size = initial_buckets_size;
-            _main_table._buckets = makeArray!(_Bucket)(allocator, _main_table._buckets_size);
-        }
-
-        if ( _in_resize ) {
-            do_resize_step();
-        }
-
-        immutable ulong computed_hash = hash_function(k);
-        _Table *t = &_main_table;
-        ulong hash = computed_hash % t._buckets_size;
-        auto np = t._buckets[hash]._chain._first;
-        while (np) {
-            if (np.v.key == k) {
-                _stat.hits++;
-                return &np.v.value;
-            }
-            np = np._next;
-        }
-        if ( !_in_resize ) {
-            return null;
-        }
-        t = &_resize_table;
-        hash = computed_hash % t._buckets_size;
-        np = t._buckets[hash]._chain._first;
-        while (np) {
-            if (np.v.key == k) {
-                _stat.hits++;
-                return &np.v.value;
-            }
-            np = np._next;
-        }
-        return null;
-    }
-
-    Optional!V put(K k, V v) @nogc @safe {
-        if ( _main_table._buckets_size == 0 ) {
-            _main_table._buckets_size = initial_buckets_size;
-            _main_table._buckets = makeArray!(_Bucket)(allocator, _main_table._buckets_size);
-        }
-
-        _stat.puts++;
-
-        if ( !_in_resize && _main_table.overloaded() ) {
-            start_resize();
-        }
-
-        if ( _in_resize ) {
-            do_resize_step();
-        }
-        
-        immutable computed_hash = hash_function(k);
-
-
-        auto u = update_in_table(&_main_table, k, v, computed_hash);
-
-        if ( u != none ) {
-            return u;
-        }
-        if ( _in_resize ) {
-            u = update_in_table(&_resize_table, k, v, computed_hash);
-        }
-
-        if ( u != none ) {
-            return u;
-        }
-        //
-        // key is not in map.
-        // insert it in proper table.
-        //
-        _Table *table = _in_resize ? &_resize_table : &_main_table;
-        _Node n = _Node(computed_hash, k, v);
-        hash_t h = computed_hash % table._buckets_size;
-        table._buckets[h]._chain.insertFront(n);
-        table._length++;
-        _stat.inserts++;
-        return no!V;
-    }
-
-    bool remove(K k) @nogc @safe {
-        bool removed;
-        removed = remove_from_table(&_main_table, k);
-        if ( removed ) {
-            _main_table._length--;
-            _stat.removes++;
-            return true;
-        }
-
-        if (! _in_resize ) {
-            return false;
-        }
-
-        removed = remove_from_table(&_resize_table, k);
-        if ( removed ) {
-            _resize_table._length--;
-            _stat.removes++;
-            return true;
-        }
-        return false;
-    }
-
-    Stat stat() @safe @nogc pure nothrow {
-        return _stat;
-    }
-}
-
-@safe unittest {
-    import std.stdio;
-    import std.experimental.logger;
-    globalLogLevel = LogLevel.info;
-
-    HashMap!(int, string) m;
-    bool ok;
-    auto u = m.put(1, "one");
-    assert(u.empty);
-    auto v = m.get(1);
-    assert(!v.empty && v == "one");
-    assert(1 in m);
-    v = m.get(2);
-    assert(v.empty);
-    assert(2 !in m);
-    // try to replace 
-    u = m.put(1, "not one");
-    assert(!u.empty);
-    assert(u == "one");
-    //m.clear();
-}
-
-@safe unittest {
-    import std.format, std.stdio;
-    import std.experimental.logger;
-    globalLogLevel = LogLevel.info;
-
-    // resize
-    HashMap!(int, string) m;
-    bool ok, inserted;
-    foreach(i; 0..128) {
-        m.put(i, "%d".format(i));
-    }
-    auto stat = m.stat;
-    assert(stat.resizes == 1);
-    assert(stat.puts == 128);
-    auto v = m.get(1);
-    stat = m.stat;
-    assert(stat.gets == 1);
-    assert(stat.hits == 1);
-    m.put(1, "11");
-    stat = m.stat;
-    assert(stat.puts - stat.inserts == 1);
-    m.clear();
-    stat = m.stat;
-    assert(m.stat.gets == 0);
-}
+//struct HashMap(K, V, Allocator = Mallocator) {
+//    /// Various statistics collector
+//    struct Stat {
+//        ulong   gets;             /// # of get() calls
+//        ulong   puts;             /// # of put() calls
+//        ulong   hits;
+//        ulong   inserts;
+//        ulong   removes;
+//        ulong   resizes;
+//        size_t  key_space;
+//        size_t  value_space;
+//    }
+//
+//    private {
+//        // resize load_factor.
+//        // Trigger for resize.
+//        // if load factor (num of elements in hash table divide hash rows) reach resize_load_factor then we 
+//        // start resize process
+//        enum    resize_load_factor = 3.0;
+//        // resize_step.
+//        // during resize we have to transfer all items from main table to 'resize' table 
+//        // (using new hash rows and hash calculatons) and then use this new table as main.
+//        // We do not transfer all items at once as it can take too much time. We transfer
+//        // 'resize_step' items on each iteration while there are any items in main table.
+//        enum    resize_step = 1000;
+//
+//        alias   allocator = Allocator.instance;
+//        alias   NodeT = _Node;
+//        struct _Node {
+//            // node of the chain in bucket
+//            hash_t  hash;
+//            K       key;
+//            V       value;
+//        }
+//        struct _Bucket {
+//            // hash bucket 
+//            SList!_Node _chain;
+//        }
+//        struct _Table {
+//            ulong     _length;          // entries in table
+//            ulong     _buckets_size;    // buckets in table
+//            _Bucket[] _buckets;
+//
+//            float load_factor() const pure @safe @nogc nothrow {
+//                if ( _length == 0 || _buckets_size == 0 ) {
+//                    return 0.0;
+//                }
+//                return float(_length)/_buckets_size;
+//            }
+//
+//            bool overloaded() const @safe @nogc nothrow pure {
+//                return load_factor() > resize_load_factor;
+//            }
+//        }
+//        bool    _in_resize;
+//        size_t  _in_resize_bucket_index;
+//        _Table  _main_table;
+//        _Table  _resize_table;
+//        Stat    _stat;
+//    }
+//
+//    ~this() @safe @nogc {
+//        clear();
+//    }
+//
+//    invariant {
+//        assert(_in_resize ? _resize_table._buckets_size > 0 : _resize_table._buckets_size == 0);
+//    }
+//    ///
+//    /// We detected that it's time to resize.
+//    /// 1. calculate new buckets_size
+//    /// 2. allocate new buckets array
+//    ///
+//    private void start_resize() @nogc @safe {
+//        _stat.resizes++;
+//        _in_resize = true;
+//        _in_resize_bucket_index = 0;
+//        _resize_table._buckets_size = _main_table._buckets_size * grow_factor;
+//        assert(_resize_table._buckets is null);
+//        _resize_table._buckets = makeArray!(_Bucket)(allocator, _resize_table._buckets_size);
+//        debug(cachetools) tracef("start resize from %d to %d", _main_table._buckets_size, _resize_table._buckets_size);
+//    }
+//
+//    private void do_resize_step() @nogc @safe {
+//        assert(_in_resize);
+//        _Bucket* b = &_main_table._buckets[_in_resize_bucket_index];
+//        for(int i; i < resize_step && _main_table._length > 0; i++) {
+//            debug(cachetools) trace("resize_step");
+//            while ( b._chain.length == 0 ) {
+//                _in_resize_bucket_index++;
+//                if ( _in_resize_bucket_index >= _main_table._buckets_size ) {
+//                    assert(_main_table._length == 0);
+//                    stop_resize();
+//                    debug(cachetools) trace("done\n");
+//                    return;
+//                }
+//                b = &_main_table._buckets[_in_resize_bucket_index];
+//            }
+//            debug(cachetools) tracef("bucket length = %d", b._chain.length);
+//            auto n = b._chain.front;
+//            b._chain.popFront;
+//            _main_table._length--;
+//            auto computed_hash = n.hash;
+//            _Table *table = &_resize_table;
+//            hash_t h = computed_hash % table._buckets_size;
+//            table._buckets[h]._chain.insertFront(n);
+//            table._length++;
+//        }
+//        debug(cachetools) trace("resize_step done");
+//        if ( _main_table._length == 0 ) {
+//            stop_resize();
+//        }
+//    }
+//
+//    ///
+//    /// All elements transfered to 'resize' table.
+//    /// free anything from main table and 'swap' content of main and resize tables
+//    /// 
+//    private void stop_resize() @nogc @safe {
+//        assert(_in_resize);
+//        assert(_main_table._length == 0);
+//        debug(cachetools) trace("stop resize");
+//        _in_resize = false;
+//        // free old buckets array in main table
+//        (() @trusted {dispose(allocator, _main_table._buckets);})();
+//        // transfer everything from resize table to main table
+//        _main_table._length = _resize_table._length;
+//        _main_table._buckets = _resize_table._buckets;
+//        // initialize resize_table
+//        _main_table._buckets_size = _resize_table._buckets_size;
+//        _resize_table = _Table.init;
+//    }
+//
+//    ulong length() const pure @nogc @safe {
+//        return _main_table._length + _resize_table._length;
+//    }
+//
+//    void clear() @nogc @safe {
+//        clear_table(&_main_table);
+//        clear_table(&_resize_table);
+//        _stat = Stat.init;
+//    }
+//
+//    private void clear_table(_Table* t) @nogc @safe nothrow {
+//        if ( t._buckets is null ) {
+//            return;
+//        }
+//        foreach(ref b; t._buckets) {
+//            b._chain.clear();
+//        }
+//        (() @trusted {dispose(allocator, t._buckets);})();
+//        t._length = 0;
+//        t._buckets = null;
+//        t._buckets_size = 0;
+//    }
+//
+//    /// return true if removed from table, false otherwise
+//    private bool remove_from_table(_Table* t, K k) @nogc @safe nothrow {
+//        bool removed;
+//        immutable ulong computed_hash = hash_function(k);
+//        immutable ulong hash = computed_hash % t._buckets_size;
+//
+//        auto bucket = &t._buckets[hash];
+//        removed = bucket._chain.remove_by_predicate((n) @nogc {return n.key==k;});
+//        return removed;
+//    }
+//
+//    /// return true if updated in table
+//    private Optional!V update_in_table(_Table* t, K k, V v, hash_t computed_hash) @nogc @safe {
+//        immutable ulong hash = computed_hash % t._buckets_size;
+//
+//        Optional!V r;
+//        auto np = t._buckets[hash]._chain._first;
+//        while ( np ) {
+//            if (np.v.key == k) {
+//                r = np.v.value;
+//                np.v.value = v;
+//                break;
+//            }
+//            np = np._next;
+//        }
+//        return r;
+//    }
+//
+//    Optional!V get(K k) @safe @nogc {
+//        if ( _main_table._buckets_size == 0 ) {
+//            _main_table._buckets_size = initial_buckets_size;
+//            _main_table._buckets = makeArray!(_Bucket)(allocator, _main_table._buckets_size);
+//        }
+//
+//        if ( _in_resize ) {
+//            do_resize_step();
+//        }
+//
+//        auto r = no!V;
+//        _stat.gets++;
+//        immutable ulong computed_hash = hash_function(k);
+//        _Table *t = &_main_table;
+//        ulong hash = computed_hash % t._buckets_size;
+//        auto chain = t._buckets[hash]._chain[];
+//        foreach(nodep; chain) {
+//            if (nodep.key == k) {
+//                _stat.hits++;
+//                r = nodep.value;
+//                break;
+//            }
+//        }
+//        if ( !_in_resize ) {
+//            return r;
+//        }
+//        t = &_resize_table;
+//        hash = computed_hash % t._buckets_size;
+//        chain = t._buckets[hash]._chain[];
+//        foreach(nodep; chain) {
+//            if (nodep.key == k) {
+//                _stat.hits++;
+//                r = nodep.value;
+//                break;
+//            }
+//        }
+//        return r;
+//    }
+//
+//    ///
+//    /// return pointer to value if key present
+//    ///
+//    V* opBinaryRight(string op)(const K k) @safe @nogc if (op == "in") {
+//
+//        if ( _main_table._buckets_size == 0 ) {
+//            _main_table._buckets_size = initial_buckets_size;
+//            _main_table._buckets = makeArray!(_Bucket)(allocator, _main_table._buckets_size);
+//        }
+//
+//        if ( _in_resize ) {
+//            do_resize_step();
+//        }
+//
+//        immutable ulong computed_hash = hash_function(k);
+//        _Table *t = &_main_table;
+//        ulong hash = computed_hash % t._buckets_size;
+//        auto np = t._buckets[hash]._chain._first;
+//        while (np) {
+//            if (np.v.key == k) {
+//                _stat.hits++;
+//                return &np.v.value;
+//            }
+//            np = np._next;
+//        }
+//        if ( !_in_resize ) {
+//            return null;
+//        }
+//        t = &_resize_table;
+//        hash = computed_hash % t._buckets_size;
+//        np = t._buckets[hash]._chain._first;
+//        while (np) {
+//            if (np.v.key == k) {
+//                _stat.hits++;
+//                return &np.v.value;
+//            }
+//            np = np._next;
+//        }
+//        return null;
+//    }
+//
+//    Optional!V put(K k, V v) @nogc @safe {
+//        if ( _main_table._buckets_size == 0 ) {
+//            _main_table._buckets_size = initial_buckets_size;
+//            _main_table._buckets = makeArray!(_Bucket)(allocator, _main_table._buckets_size);
+//        }
+//
+//        _stat.puts++;
+//
+//        if ( !_in_resize && _main_table.overloaded() ) {
+//            start_resize();
+//        }
+//
+//        if ( _in_resize ) {
+//            do_resize_step();
+//        }
+//        
+//        immutable computed_hash = hash_function(k);
+//
+//
+//        auto u = update_in_table(&_main_table, k, v, computed_hash);
+//
+//        if ( u != none ) {
+//            return u;
+//        }
+//        if ( _in_resize ) {
+//            u = update_in_table(&_resize_table, k, v, computed_hash);
+//        }
+//
+//        if ( u != none ) {
+//            return u;
+//        }
+//        //
+//        // key is not in map.
+//        // insert it in proper table.
+//        //
+//        _Table *table = _in_resize ? &_resize_table : &_main_table;
+//        _Node n = _Node(computed_hash, k, v);
+//        hash_t h = computed_hash % table._buckets_size;
+//        table._buckets[h]._chain.insertFront(n);
+//        table._length++;
+//        _stat.inserts++;
+//        return no!V;
+//    }
+//
+//    bool remove(K k) @nogc @safe {
+//        bool removed;
+//        removed = remove_from_table(&_main_table, k);
+//        if ( removed ) {
+//            _main_table._length--;
+//            _stat.removes++;
+//            return true;
+//        }
+//
+//        if (! _in_resize ) {
+//            return false;
+//        }
+//
+//        removed = remove_from_table(&_resize_table, k);
+//        if ( removed ) {
+//            _resize_table._length--;
+//            _stat.removes++;
+//            return true;
+//        }
+//        return false;
+//    }
+//
+//    Stat stat() @safe @nogc pure nothrow {
+//        return _stat;
+//    }
+//}
+//
+//@safe unittest {
+//    import std.stdio;
+//    import std.experimental.logger;
+//    globalLogLevel = LogLevel.info;
+//
+//    HashMap!(int, string) m;
+//    bool ok;
+//    auto u = m.put(1, "one");
+//    assert(u.empty);
+//    auto v = m.get(1);
+//    assert(!v.empty && v == "one");
+//    assert(1 in m);
+//    v = m.get(2);
+//    assert(v.empty);
+//    assert(2 !in m);
+//    // try to replace 
+//    u = m.put(1, "not one");
+//    assert(!u.empty);
+//    assert(u == "one");
+//    //m.clear();
+//}
+//
+//@safe unittest {
+//    import std.format, std.stdio;
+//    import std.experimental.logger;
+//    globalLogLevel = LogLevel.info;
+//
+//    // resize
+//    HashMap!(int, string) m;
+//    bool ok, inserted;
+//    foreach(i; 0..128) {
+//        m.put(i, "%d".format(i));
+//    }
+//    auto stat = m.stat;
+//    assert(stat.resizes == 1);
+//    assert(stat.puts == 128);
+//    auto v = m.get(1);
+//    stat = m.stat;
+//    assert(stat.gets == 1);
+//    assert(stat.hits == 1);
+//    m.put(1, "11");
+//    stat = m.stat;
+//    assert(stat.puts - stat.inserts == 1);
+//    m.clear();
+//    stat = m.stat;
+//    assert(m.stat.gets == 0);
+//}
 
 @safe unittest {
     class A {
@@ -444,6 +446,26 @@ package bool SmallValueFootprint(V)() {
         return false;
 }
 
+private bool equals(K)(K a, K b)
+{
+    static if ( is(K==class) )
+    {
+        if (a is b)
+        {
+            return true;
+        }
+        if (a is null || b is null)
+        {
+            return false;
+        }
+        return a.opEquals(b);
+    }
+    else
+    {
+        return a == b;
+    }
+}
+
 struct OAHashMap(K, V, Allocator = Mallocator) {
 
     enum initial_buckets_num = 32;
@@ -469,7 +491,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
             {
                 V*  value_ptr;
             }
-            string toString() {
+            string toString() const {
                 import std.format;
                 static if (InlineValueOrClass) {
                     return "%s, key: %s, value: %s".format(
@@ -501,14 +523,16 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
                     (() @trusted {dispose(allocator, _buckets[i].value_ptr);})();
                 }
             }
-            (() @trusted {dispose(allocator, _buckets);})();
+            (() @trusted {
+                GC.removeRange(_buckets.ptr);
+                dispose(allocator, _buckets);
+            })();
         }
     }
     invariant {
         assert(_allocated>=0 && _deleted>=0 && _empty >= 0);
         assert(_allocated + _deleted + _empty == _buckets_num, "a:%s + d:%s + e:%s != total: %s".format(_allocated, _deleted,  _empty, _buckets_num));
     }
-
     ///
     /// Find any unallocated bucket starting from start_index (inclusive)
     /// Returns non-negative index in success or -1 on fail
@@ -531,20 +555,22 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     /// Find allocated bucket for given key and computed hash starting from start_index
     /// Returns: nonnegative index if bucket found or -1 otherwise
     ///
-    package long findEntryIndex(const long start_index, const hash_t hash, in K key) pure const @safe @nogc {
+    /// Inherits @nogc and @safe from K opEquals()
+    ///
+    package long findEntryIndex(const long start_index, const hash_t hash, in K key) pure const {
         long index = start_index;
 
         do {
             immutable t = _buckets[index].type;
 
-            () @nogc {debug(cachetools) tracef("test entry index %d (%s) for key %s", index, _buckets[index], key);}();
+            () @nogc {debug(cachetools) tracef("test entry index %d (%s) for key %s", index, _buckets[index].toString, key);}();
 
             if ( t == EMPTY ) {
                 break;
             }
 
             immutable h = _buckets[index].hash;
-            if ( t == ALLOCATED && h == hash && _buckets[index].key == key ) {
+            if ( t == ALLOCATED && h == hash && equals(_buckets[index].key, key) ) {
                 () @nogc {debug(cachetools) tracef("test entry index %d for key %s - success", index, key);}();
                 return index;
             }
@@ -557,7 +583,10 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     /// Find place where we can insert(first DELETED or EMPTY bucket) or update existent (ALLOCATED)
     /// bucket for key k and precomputed hash starting from start_index
     ///
-    package long findUpdateIndex(const long start_index, const hash_t hash, in K key) pure const @safe @nogc {
+    ///
+    /// Inherits @nogc and @safe from K opEquals()
+    ///
+    package long findUpdateIndex(const long start_index, const hash_t hash, in K key) pure const {
         long index = start_index;
 
         do {
@@ -571,7 +600,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
             }
 
             immutable h = _buckets[index].hash;
-            if ( t == ALLOCATED && h == hash && _buckets[index].key == key ) 
+            if ( t == ALLOCATED && h == hash && equals(_buckets[index].key, key) ) 
             {
                 () @nogc @trusted {debug(cachetools) tracef("test update index %d (%s) for key %s - success", index, _buckets[index], key);}();
                 return index;
@@ -601,6 +630,9 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     }
 
     V* opBinaryRight(string op)(in K k) @safe if (op == "in") {
+
+        if ( _buckets_num == 0 ) return null;
+
         immutable computed_hash = hash_function(k);
         immutable start_index = computed_hash % _buckets_num;
         immutable lookup_index = findEntryIndex(start_index, computed_hash, k);
@@ -635,6 +667,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         int _new_buckets_num = dest;
         int _new_allocated = 0;
         _Bucket[] _new_buckets = makeArray!(_Bucket)(allocator, _new_buckets_num);
+        () @trusted {GC.addRange(_new_buckets.ptr, _new_buckets_num * _Bucket.sizeof);}();
         // iterate over entries
         () @nogc {debug(cachetools) trace("start resizing");}();
         () @nogc {debug(cachetools) tracef("start resizing: old loadfactor: %s", (1.0*_allocated) / _buckets_num);}();
@@ -643,17 +676,20 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
             if ( t == DELETED || t == EMPTY ) {
                 continue;
             }
-            auto h = _buckets[i].hash;
+            immutable h = _buckets[i].hash;
 
-            long start_index = h % _new_buckets_num;
-            long new_position = findEmptyIndexExtended(start_index, _new_buckets, _new_buckets_num);
+            immutable start_index = h % _new_buckets_num;
+            immutable new_position = findEmptyIndexExtended(start_index, _new_buckets, _new_buckets_num);
             assert( new_position >= 0 );
             assert(_new_buckets[new_position].type == EMPTY );
 
             _new_buckets[new_position] = _buckets[i];
             _new_allocated++;
         }
-        (() @trusted {dispose(allocator, _buckets);})();
+        (() @trusted {
+            GC.removeRange(_buckets.ptr);
+            dispose(allocator, _buckets);
+        })();
         _buckets = _new_buckets;
         _buckets_num = _new_buckets_num;
         _allocated = _new_allocated;
@@ -663,23 +699,24 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         () @nogc {debug(cachetools) tracef("resizing done: new loadfactor: %s", (1.0*_allocated) / _buckets_num);}();
     }
 
-    alias put = putOld;
+    //alias put = putOld;
 
     ///
     /// put pair (k,v) into hash.
     /// it must be @safe, it inherits @nogc properties from K and V
     /// It can resize hashtable it is overloaded or has too much deleted entries
     ///
-    bool putOld(K k, V v) @safe {
+    bool put(K k, V v) @safe {
         if ( !_buckets_num ) {
             _buckets_num = _empty = initial_buckets_num;
             _buckets = makeArray!(_Bucket)(allocator, _buckets_num);
+            () @trusted {GC.addRange(_buckets.ptr, _buckets_num * _Bucket.sizeof);}();
         }
 
         () @nogc @trusted {debug(cachetools) tracef("put k: %s, v: %s", k,v);}();
 
         if ( tooHighLoad ) {
-            doResize(8*_buckets_num);
+            doResize(grow_factor * _buckets_num);
         }
 
         if ( tooMuchDeleted ) {
@@ -723,100 +760,100 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         return true;
     }
 
-    bool putRobinHood(K k, V v) @safe {
-        //
-        // RobinHood hashing
-        //
-
-        import std.algorithm.mutation: swap;
-        if ( !_buckets_num ) {
-            _buckets_num = _empty = initial_buckets_num;
-            _buckets = makeArray!(_Bucket)(allocator, _buckets_num);
-        }
-
-        () @nogc @trusted {debug(cachetools) tracef("robinhood put k: %s, v: %s", k,v);}();
-
-        if ( tooHighLoad ) {
-            doResize(2*_buckets_num);
-        }
-
-        if ( tooMuchDeleted ) {
-            doResize(_buckets_num);
-        }
-
-        auto computed_hash = hash_function(k);
-        long start_index = computed_hash % _buckets_num;
-        long placement_index = start_index;
-
-        static if (!(inlineValues || is(V==class)) ) {
-            auto value_ptr = make!(V)(allocator);
-            *value_ptr = v;
-        }
-
-        do {
-            () @nogc @trusted {debug(cachetools) tracef("test bucket[%d] = %s", placement_index, _buckets[placement_index]);}();
-
-            immutable b_type = _buckets[placement_index].type;
-            if ( b_type == EMPTY ) {
-                break;
-            }
-            immutable b_hash = _buckets[placement_index].hash;
-            auto b_key = _buckets[placement_index].key;
-            if ( b_type == ALLOCATED && computed_hash == b_hash && k == b_key ) {
-                break;
-            }
-
-            immutable b_ideal_index = b_hash % _buckets_num;
-            immutable his_distance = (placement_index - b_ideal_index) % _buckets_num;
-            immutable my_distance =   (placement_index - start_index) % _buckets_num;
-
-            () @nogc @trusted {debug(cachetools) tracef("put k: %s, v: %s, his_distance: %d, my_distance: %d", k, v, his_distance, my_distance);}();
-
-            if ( my_distance > his_distance )
-            {
-                // do swap
-                () @nogc @trusted {debug(cachetools) tracef("swapping key %s with key %s", k, b_key);}();
-
-                swap(k, _buckets[placement_index].key);
-                swap(computed_hash, _buckets[placement_index].hash);
-                //swap(start_index, b_ideal_index);
-                static if ( inlineValues || is(V==class) ) {
-                    swap(v, _buckets[placement_index].value);
-                }
-                else
-                {
-                    swap(value_ptr, _buckets[placement_index].value_ptr);
-                }
-                () @nogc @trusted {debug(cachetools) tracef("after swap bucket[%d] = %s", placement_index, _buckets[placement_index]);}();
-            }
-            placement_index = ++placement_index % _buckets_num;
-            assert(placement_index != start_index, "table full");
-        } while (true);
-
-        //long placement_index = findUpdateIndex(start_index, computed_hash, k);
-        assert(placement_index >= 0);
-
-        () @nogc @trusted {debug(cachetools) tracef("key: %s, start_index: %d, placement_index: %d", k, start_index, placement_index);}();
-
-        _buckets[placement_index].type = ALLOCATED;
-        _buckets[placement_index].hash = computed_hash;
-        _buckets[placement_index].key = k;
-        static if ( inlineValues || is(V==class) )
-        {
-            () @nogc @trusted {debug(cachetools) tracef("place inline buckets[%d] '%s'='%s'", placement_index, k, v);}();
-            _buckets[placement_index].value = v;
-        }
-        else
-        {
-            () @nogc @trusted {debug(cachetools) tracef("place with allocation buckets[%d] '%s'='%s'", placement_index, k, v);}();
-            auto p = make!(V)(allocator);
-            *p = v;
-            _buckets[placement_index].value_ptr = p;
-        }
-        _allocated++;
-        _empty--;
-        return true;
-    }
+    //bool putRobinHood(K k, V v) @safe {
+    //    //
+    //    // RobinHood hashing
+    //    //
+    //
+    //    import std.algorithm.mutation: swap;
+    //    if ( !_buckets_num ) {
+    //        _buckets_num = _empty = initial_buckets_num;
+    //        _buckets = makeArray!(_Bucket)(allocator, _buckets_num);
+    //    }
+    //
+    //    () @nogc @trusted {debug(cachetools) tracef("robinhood put k: %s, v: %s", k,v);}();
+    //
+    //    if ( tooHighLoad ) {
+    //        doResize(2*_buckets_num);
+    //    }
+    //
+    //    if ( tooMuchDeleted ) {
+    //        doResize(_buckets_num);
+    //    }
+    //
+    //    auto computed_hash = hash_function(k);
+    //    long start_index = computed_hash % _buckets_num;
+    //    long placement_index = start_index;
+    //
+    //    static if (!(inlineValues || is(V==class)) ) {
+    //        auto value_ptr = make!(V)(allocator);
+    //        *value_ptr = v;
+    //    }
+    //
+    //    do {
+    //        () @nogc @trusted {debug(cachetools) tracef("test bucket[%d] = %s", placement_index, _buckets[placement_index]);}();
+    //
+    //        immutable b_type = _buckets[placement_index].type;
+    //        if ( b_type == EMPTY ) {
+    //            break;
+    //        }
+    //        immutable b_hash = _buckets[placement_index].hash;
+    //        auto b_key = _buckets[placement_index].key;
+    //        if ( b_type == ALLOCATED && computed_hash == b_hash && k == b_key ) {
+    //            break;
+    //        }
+    //
+    //        immutable b_ideal_index = b_hash % _buckets_num;
+    //        immutable his_distance = (placement_index - b_ideal_index) % _buckets_num;
+    //        immutable my_distance =   (placement_index - start_index) % _buckets_num;
+    //
+    //        () @nogc @trusted {debug(cachetools) tracef("put k: %s, v: %s, his_distance: %d, my_distance: %d", k, v, his_distance, my_distance);}();
+    //
+    //        if ( my_distance > his_distance )
+    //        {
+    //            // do swap
+    //            () @nogc @trusted {debug(cachetools) tracef("swapping key %s with key %s", k, b_key);}();
+    //
+    //            swap(k, _buckets[placement_index].key);
+    //            swap(computed_hash, _buckets[placement_index].hash);
+    //            //swap(start_index, b_ideal_index);
+    //            static if ( inlineValues || is(V==class) ) {
+    //                swap(v, _buckets[placement_index].value);
+    //            }
+    //            else
+    //            {
+    //                swap(value_ptr, _buckets[placement_index].value_ptr);
+    //            }
+    //            () @nogc @trusted {debug(cachetools) tracef("after swap bucket[%d] = %s", placement_index, _buckets[placement_index]);}();
+    //        }
+    //        placement_index = ++placement_index % _buckets_num;
+    //        assert(placement_index != start_index, "table full");
+    //    } while (true);
+    //
+    //    //long placement_index = findUpdateIndex(start_index, computed_hash, k);
+    //    assert(placement_index >= 0);
+    //
+    //    () @nogc @trusted {debug(cachetools) tracef("key: %s, start_index: %d, placement_index: %d", k, start_index, placement_index);}();
+    //
+    //    _buckets[placement_index].type = ALLOCATED;
+    //    _buckets[placement_index].hash = computed_hash;
+    //    _buckets[placement_index].key = k;
+    //    static if ( inlineValues || is(V==class) )
+    //    {
+    //        () @nogc @trusted {debug(cachetools) tracef("place inline buckets[%d] '%s'='%s'", placement_index, k, v);}();
+    //        _buckets[placement_index].value = v;
+    //    }
+    //    else
+    //    {
+    //        () @nogc @trusted {debug(cachetools) tracef("place with allocation buckets[%d] '%s'='%s'", placement_index, k, v);}();
+    //        auto p = make!(V)(allocator);
+    //        *p = v;
+    //        _buckets[placement_index].value_ptr = p;
+    //    }
+    //    _allocated++;
+    //    _empty--;
+    //    return true;
+    //}
 
     bool remove(K k) @safe {
 
@@ -871,10 +908,49 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         }
         return true;
     }
+    auto length() const pure nothrow @nogc @safe
+    {
+        return _allocated;
+    }
+    auto byKey() pure
+    {
+        struct _kvRange {
+            int         _pos;
+            ulong       _buckets_num;
+            _Bucket[]   _buckets;
+            this(_Bucket[] _b)
+            {
+                _buckets = _b;
+                _buckets_num = _b.length;
+                _pos = 0;
+                while( _pos < _buckets_num  && _buckets[_pos].type != ALLOCATED )
+                {
+                    _pos++;
+                }
+            }
+            bool empty() const pure @safe @nogc
+            {
+                return _pos == _buckets_num;
+            }
+            K front()
+            {
+                return _buckets[_pos].key;
+            }
+            void popFront()
+            {
+                _pos++;
+                while( _pos < _buckets_num && _buckets[_pos].type != ALLOCATED )
+                {
+                    _pos++;
+                }
+            }
+        }
+        return _kvRange(_buckets);
+    }
 }
 
 @safe unittest {
-    globalLogLevel = LogLevel.trace;
+    globalLogLevel = LogLevel.info;
     () @nogc {
         OAHashMap!(int, int) int2int;
         foreach(i; 1..5) {
@@ -902,7 +978,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         int2ls.put(33,LargeStruct(33,33)); // <- follow key 1, move key 2 on pos 3
         assert(1 in int2ls, "1 not in hash");
         assert(2 in int2ls, "2 not in hash");
-        assert(1 in int2ls, "3 not in hash");
+        assert(3 in int2ls, "3 not in hash");
         assert(4 in int2ls, "4 not in hash");
         assert(33 in int2ls, "33 not in hash");
         int2ls.remove(33);
@@ -993,4 +1069,87 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         int2LagreStruct.put(1, LargeStruct(1,2));
     }();
     globalLogLevel = LogLevel.info;
+}
+
+@safe unittest
+{
+    import std.typecons;
+    alias K = Tuple!(int, int);
+    alias V = int;
+    OAHashMap!(K,V) h;
+    K k0 = K(0,1);
+    V v0 = 1;
+    h.put(k0, v0);
+    int *v = k0 in h;
+    assert(v);
+    assert(*v == 1);
+    
+}
+
+@safe unittest
+{
+    class c {
+        int a;
+        this(int a)
+        {
+            a = a;
+        }
+
+        bool opEquals(const c other) pure const @safe @nogc
+        {
+            return this is other || this.a == other.a;
+        }
+    }
+    alias K = c;
+    alias V = int;
+    OAHashMap!(K,V) h;
+    K k0 = new c(0);
+    V v0 = 1;
+    h.put(k0, v0);
+    int *v = k0 in h;
+    assert(v);
+    assert(*v == 1);
+
+}
+
+/// Test if we can work with non-@nogc opEquals for class-key.
+/// opEquals anyway must be non-@system.
+@safe unittest
+{
+    class c {
+        int a;
+        this(int a)
+        {
+            a = a;
+        }
+
+        bool opEquals(const c other) pure const @safe
+        {
+            auto _ = [1,2,3]; // this cause GC
+            return this is other || this.a == other.a;
+        }
+    }
+    alias K = c;
+    alias V = int;
+    OAHashMap!(K,V) h;
+    K k0 = new c(0);
+    V v0 = 1;
+    h.put(k0, v0);
+    int *v = k0 in h;
+    assert(v);
+    assert(*v == 1);
+
+}
+
+@safe unittest
+{
+    import std.stdio;
+    OAHashMap!(int, string) m;
+    m.put(1, "one");
+    m.put(10, "ten");
+    m.put(2, "two");
+    foreach(k; m.byKey)
+    {
+        writeln(k);
+    }
 }

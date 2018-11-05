@@ -16,9 +16,9 @@ immutable trials = 1;
 
 
 static this() {
-    auto fifo = new FIFOPolicy!(int, int);
-    fifo.maxLength(iterations/2);
-    p = fifo;
+    //auto fifo = new FIFOPolicy!(int, int);
+    //fifo.maxLength(iterations/2);
+    //p = fifo;
 }
 
 struct Large {
@@ -124,7 +124,7 @@ void f_AA_largeClass() @safe {
 }
 
 void f_hashmap() @safe {
-    HashMap!(int, int) c;
+    OAHashMap!(int, int) c;
     auto rnd = Random(unpredictableSeed);
 
     foreach(i;0..iterations) {
