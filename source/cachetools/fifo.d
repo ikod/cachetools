@@ -189,40 +189,40 @@ class FIFOPolicy(K, V, Allocator = Mallocator) : CachePolicy!(K, V) {
     }
 }
 
-@safe unittest {
-    import std.experimental.logger;
-    import std.format;
-
-    globalLogLevel = LogLevel.info;
-    bool ok;
-    FIFOPolicy!(int, string) policy = new FIFOPolicy!(int, string);
-
-    () @nogc {
-        policy.maxLength(3);
-//        policy.onRemoval = &onRemoval;
-        policy.put(1, "one");
-        assert(policy.length == 1);
-        policy.put(1, "one-one");
-        assert(policy.length == 1);
-        policy.put(2, "two");
-        assert(policy.length == 2);
-        auto v = policy.get(1);
-        assert(!v.empty && v.front == "one-one");
-        assert(policy.length == 2);
-        policy.put(3, "three");
-        assert(policy.length == 3);
-        policy.put(4, "four");
-        assert(policy.length == 3);
-        // oldest key '1' saved by 'second chance algorithm', next to remove - '2'
-        v = policy.get(2);
-        assert(v.empty);
-        ok = policy.remove(4);
-        assert(ok);
-        ok = policy.remove(5);
-        assert(!ok);
-    }();
-    globalLogLevel = LogLevel.info;
-}
+//@safe unittest {
+//    import std.experimental.logger;
+//    import std.format;
+//
+//    globalLogLevel = LogLevel.info;
+//    bool ok;
+//    FIFOPolicy!(int, string) policy = new FIFOPolicy!(int, string);
+//
+//    () @nogc {
+//        policy.maxLength(3);
+////        policy.onRemoval = &onRemoval;
+//        policy.put(1, "one");
+//        assert(policy.length == 1);
+//        policy.put(1, "one-one");
+//        assert(policy.length == 1);
+//        policy.put(2, "two");
+//        assert(policy.length == 2);
+//        auto v = policy.get(1);
+//        assert(!v.empty && v.front == "one-one");
+//        assert(policy.length == 2);
+//        policy.put(3, "three");
+//        assert(policy.length == 3);
+//        policy.put(4, "four");
+//        assert(policy.length == 3);
+//        // oldest key '1' saved by 'second chance algorithm', next to remove - '2'
+//        v = policy.get(2);
+//        assert(v.empty);
+//        ok = policy.remove(4);
+//        assert(ok);
+//        ok = policy.remove(5);
+//        assert(!ok);
+//    }();
+//    globalLogLevel = LogLevel.info;
+//}
 
 class RemovedEntriesList(K, V): RemovedEntryListener!(K, V) {
     private {
@@ -262,55 +262,55 @@ class RemovedEntriesList(K, V): RemovedEntryListener!(K, V) {
         }
 }
 
-@safe unittest {
-    auto r = new RemovedEntriesList!(int, string)(16);
-    () @nogc {
-        assert(r.empty);
-
-        r.add(1, "one");
-        assert(!r.empty);
-        auto e = r.get();
-        assert(e.key == 1 && e.value == "one");
-        assert(r.empty);
-        foreach (i; 0..14) {
-            r.add(i, "string");
-        }
-
-        while(!r.empty) {
-            auto v = r.get();
-        }
-    }();
-}
-
-@safe unittest {
-
-    alias K = int;
-    alias V = string;
-    FIFOPolicy!(K,V) cache = new FIFOPolicy!(K, V);
-    RemovedEntryListener!(K, V) rel = new RemovedEntriesList!(K, V)();
-    cache
-        .removedEntryListener(rel)
-        .maxLength(32);
-
-    () @nogc {
-        import std.range;
-        import std.algorithm;
-
-        SList!int removed_keys;
-
-        foreach (i; 0..1000) {
-            cache.put(i, "string");
-            while(!rel.empty) {
-                auto kv = rel.get();
-                removed_keys.insertBack(kv.key);
-            }
-        }
-
-        foreach(i; iota(968)) {
-            assert(removed_keys.front == i);
-            removed_keys.popFront();
-        }
-
-    }();
-}
-
+//@safe unittest {
+//    auto r = new RemovedEntriesList!(int, string)(16);
+//    () @nogc {
+//        assert(r.empty);
+//
+//        r.add(1, "one");
+//        assert(!r.empty);
+//        auto e = r.get();
+//        assert(e.key == 1 && e.value == "one");
+//        assert(r.empty);
+//        foreach (i; 0..14) {
+//            r.add(i, "string");
+//        }
+//
+//        while(!r.empty) {
+//            auto v = r.get();
+//        }
+//    }();
+//}
+//
+//@safe unittest {
+//
+//    alias K = int;
+//    alias V = string;
+//    FIFOPolicy!(K,V) cache = new FIFOPolicy!(K, V);
+//    RemovedEntryListener!(K, V) rel = new RemovedEntriesList!(K, V)();
+//    cache
+//        .removedEntryListener(rel)
+//        .maxLength(32);
+//
+//    () @nogc {
+//        import std.range;
+//        import std.algorithm;
+//
+//        SList!int removed_keys;
+//
+//        foreach (i; 0..1000) {
+//            cache.put(i, "string");
+//            while(!rel.empty) {
+//                auto kv = rel.get();
+//                removed_keys.insertBack(kv.key);
+//            }
+//        }
+//
+//        foreach(i; iota(968)) {
+//            assert(removed_keys.front == i);
+//            removed_keys.popFront();
+//        }
+//
+//    }();
+//}
+//

@@ -14,10 +14,11 @@ ulong hash_function(T)(in T v) @nogc @trusted {
         return v;
     }
     else static if ( is(T == string) ) {
+        // FNV-1a hash
         hash_t h = 0xcbf29ce484222325;
         foreach (const ubyte c; cast(ubyte[]) v)
         {
-            h ^= ((c - ' ') * 13);
+            h ^= c;
             h *= 0x100000001b3;
         }
         return h;
@@ -26,11 +27,16 @@ ulong hash_function(T)(in T v) @nogc @trusted {
         hash_t h = 0xcbf29ce484222325;
         foreach (const ubyte c; bytes)
         {
-            h ^= ((c - ' ') * 13);
+            h ^= c;
             h *= 0x100000001b3;
         }
         return h;
     }
+}
+
+@safe unittest
+{
+    assert(hash_function("abc") == 0xe71fa2190541574b);
 }
 
 //bool canUseToHash(T)() {

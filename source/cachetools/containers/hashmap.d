@@ -4,7 +4,9 @@ import std.traits;
 import std.experimental.logger;
 import std.format;
 import std.typecons;
+
 import core.memory;
+import core.bitop;
 
 import optional;
 
@@ -16,8 +18,6 @@ private import cachetools.containers.lists;
 
 // K (key type) must be of value type without references.
 
-enum initial_buckets_size = 139;
-enum grow_factor = 2;
 
 //struct HashMap(K, V, Allocator = Mallocator) {
 //    /// Various statistics collector
@@ -465,22 +465,43 @@ private bool equals(K)(K a, K b)
         return a == b;
     }
 }
+/*
+dub run -b release --compiler ldc2
+Running ./cachetools 
+AA!(int,int)    [137 ms, 348 μs, and 6 hnsecs]
+OA!(int,int)    [77 ms, 913 μs, and 1 hnsec]
+OA!(int,int) GC [80 ms, 571 μs, and 3 hnsecs]
+---
+AA large        [122 ms and 157 μs]
+OA large        [177 ms, 167 μs, and 4 hnsecs]
+OA large GC     [125 ms, 771 μs, and 8 hnsecs]
+---
+AA largeClass   [183 ms, 366 μs, and 3 hnsecs]
+OA largeClass   [124 ms, 617 μs, and 3 hnsecs]
+OA largeClassGC [106 ms, 407 μs, and 7 hnsecs]
+---
+*/
 
 struct OAHashMap(K, V, Allocator = Mallocator) {
 
     enum initial_buckets_num = 32;
+    enum grow_factor = 2;
     enum inlineValues = SmallValueFootprint!V();
     enum InlineValueOrClass = inlineValues || is(V==class);
     enum overload_threshold = 0.6;
     enum deleted_threshold = 0.2;
 
+    static assert(hash_t.sizeof == 8);
+
     private {
         alias   allocator = Allocator.instance;
-        enum    EMPTY = 0;
-        enum    DELETED = 1;
-        enum    ALLOCATED = 2;
+        enum    EMPTY_HASH =     0x00_00_00_00_00_00_00_00;
+        enum    DELETED_HASH =   0x10_00_00_00_00_00_00_00;
+        enum    ALLOCATED_HASH = 0x20_00_00_00_00_00_00_00;
+        enum    TYPE_MASK =      0xF0_00_00_00_00_00_00_00;
+        enum    HASH_MASK =      0x0F_FF_FF_FF_FF_FF_FF_FF;
+
         struct  _Bucket {
-            int     type; // EMPTY, DELETED or ALLOCATED
             hash_t  hash;
             K       key;
             static if (InlineValueOrClass)
@@ -491,21 +512,23 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
             {
                 V*  value_ptr;
             }
+
             string toString() const {
                 import std.format;
                 static if (InlineValueOrClass) {
-                    return "%s, key: %s, value: %s".format(
-                        [0:"free", 1:"deleted", 2:"allocated"][type],
-                        key, value);
+                    return "%s, hash: %0x,key: %s, value: %s".format(
+                        [EMPTY_HASH:"free", DELETED_HASH:"deleted", ALLOCATED_HASH:"allocated"][cast(long   )(hash & TYPE_MASK)],
+                        hash, key, value);
                 } else {
-                    return "%s, key: %s, value: %s".format(
-                        [0:"free", 1:"deleted", 2:"allocated"][type],
-                        key,
+                    return "%s, hash: %0x, key: %s, value: %s".format(
+                        [EMPTY_HASH:"free", DELETED_HASH:"deleted", ALLOCATED_HASH:"allocated"][cast(long)(hash & TYPE_MASK)],
+                        hash, key,
                         value_ptr !is null?  format("%s", *value_ptr) : "-");
                 }
             }
         }
         int         _buckets_num;
+        int         _mask;
         _Bucket[]   _buckets;
         int         _allocated;
         int         _deleted;
@@ -516,8 +539,8 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         if ( _buckets_num > 0 ) {
             static if ( !InlineValueOrClass ) {
                 for(int i=0;i<_buckets_num;i++) {
-                    auto t = _buckets[i].type;
-                    if ( t == DELETED || t == EMPTY ) {
+                    auto t = _buckets[i].hash;
+                    if ( t <= DELETED_HASH ) {
                         continue;
                     }
                     (() @trusted {dispose(allocator, _buckets[i].value_ptr);})();
@@ -541,14 +564,13 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         long index = start_index;
 
         do {
-            () @nogc {debug(cachetools) tracef("test index %d for nonALLOCATED", index);}();
-            auto t = _buckets[index].type;
-            if ( t != ALLOCATED ) {
+            () @nogc {debug(cachetools) tracef("test index %d for non-ALLOCATED", index);}();
+            if ( _buckets[index].hash < ALLOCATED_HASH )
+            {
                 return index;
             }
-            index = ++index % _buckets_num;
+            index = (index + 1) & _mask;
         } while(index != start_index);
-
         return -1;
     }
     ///
@@ -557,24 +579,25 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     ///
     /// Inherits @nogc and @safe from K opEquals()
     ///
-    package long findEntryIndex(const long start_index, const hash_t hash, in K key) pure const {
+    package long findEntryIndex(const long start_index, const hash_t hash, in K key) pure const
+    in { assert(hash < DELETED_HASH); }
+    do {
         long index = start_index;
 
         do {
-            immutable t = _buckets[index].type;
+            immutable h = _buckets[index].hash;
 
             () @nogc {debug(cachetools) tracef("test entry index %d (%s) for key %s", index, _buckets[index].toString, key);}();
 
-            if ( t == EMPTY ) {
+            if ( h == EMPTY_HASH ) {
                 break;
             }
 
-            immutable h = _buckets[index].hash;
-            if ( t == ALLOCATED && h == hash && equals(_buckets[index].key, key) ) {
+            if ( h >= ALLOCATED_HASH && (h & HASH_MASK) == hash && equals(_buckets[index].key, key) ) {
                 () @nogc {debug(cachetools) tracef("test entry index %d for key %s - success", index, key);}();
                 return index;
             }
-            index = ++index % _buckets_num;
+            index = (index + 1) & _mask;
         } while(index != start_index);
         return -1;
     }
@@ -586,26 +609,27 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     ///
     /// Inherits @nogc and @safe from K opEquals()
     ///
-    package long findUpdateIndex(const long start_index, const hash_t hash, in K key) pure const {
+    package long findUpdateIndex(const long start_index, const hash_t computed_hash, in K key) pure const 
+    in { assert(computed_hash < DELETED_HASH); }
+    do {
         long index = start_index;
 
         do {
-            immutable t = _buckets[index].type;
+            immutable h = _buckets[index].hash;
 
             () @nogc @trusted {debug(cachetools) tracef("test update index %d (%s) for key %s", index, _buckets[index], key);}();
 
-            if ( t == EMPTY || t == DELETED ) {
+            if ( h <= DELETED_HASH ) { // empty or deleted
                 () @nogc @trusted {debug(cachetools) tracef("test update index %d (%s) for key %s - success", index, _buckets[index], key);}();
                 return index;
             }
-
-            immutable h = _buckets[index].hash;
-            if ( t == ALLOCATED && h == hash && equals(_buckets[index].key, key) ) 
+            assert((h & TYPE_MASK) == ALLOCATED_HASH);
+            if ( (h & HASH_MASK) == computed_hash && equals(_buckets[index].key, key) ) 
             {
                 () @nogc @trusted {debug(cachetools) tracef("test update index %d (%s) for key %s - success", index, _buckets[index], key);}();
                 return index;
             }
-            index = ++index % _buckets_num;
+            index = (index + 1) & _mask;
         } while(index != start_index);
         return -1;
     }
@@ -613,18 +637,19 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     /// Find unallocated entry in the buckets slice
     /// We use this function during resize() only.
     ///
-    package long findEmptyIndexExtended(const long start_index, in ref _Bucket[] buckets, int buckets_num) pure const @safe @nogc {
+    package long findEmptyIndexExtended(const long start_index, in ref _Bucket[] buckets, int buckets_num) pure const @safe @nogc 
+    {
         long index = start_index;
 
         do {
-            immutable t = buckets[index].type;
+            immutable t = buckets[index].hash;
             
-            if ( t == EMPTY || t == DELETED )
+            if ( t <= DELETED_HASH ) // empty or deleted
             {
                 return index;
             }
 
-            index = ++index % buckets_num;
+            index = (index + 1) & _mask;
         } while(index != start_index);
         return -1;
     }
@@ -633,8 +658,8 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
 
         if ( _buckets_num == 0 ) return null;
 
-        immutable computed_hash = hash_function(k);
-        immutable start_index = computed_hash % _buckets_num;
+        immutable computed_hash = hash_function(k) & HASH_MASK;
+        immutable start_index = computed_hash & _mask;
         immutable lookup_index = findEntryIndex(start_index, computed_hash, k);
         if ( lookup_index == -1) {
             return null;
@@ -664,7 +689,8 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     }
 
     void doResize(int dest) @safe {
-        int _new_buckets_num = dest;
+        immutable _new_buckets_num = dest;
+        immutable _new_mask = dest - 1;
         int _new_allocated = 0;
         _Bucket[] _new_buckets = makeArray!(_Bucket)(allocator, _new_buckets_num);
         () @trusted {GC.addRange(_new_buckets.ptr, _new_buckets_num * _Bucket.sizeof);}();
@@ -672,16 +698,15 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         () @nogc {debug(cachetools) trace("start resizing");}();
         () @nogc {debug(cachetools) tracef("start resizing: old loadfactor: %s", (1.0*_allocated) / _buckets_num);}();
         for(int i=0;i<_buckets_num;i++) {
-            auto t = _buckets[i].type;
-            if ( t == DELETED || t == EMPTY ) {
+            immutable h = _buckets[i].hash;
+            if ( h <= DELETED_HASH ) { // empty or deleted
                 continue;
             }
-            immutable h = _buckets[i].hash;
 
-            immutable start_index = h % _new_buckets_num;
+            immutable start_index = h & _new_mask;
             immutable new_position = findEmptyIndexExtended(start_index, _new_buckets, _new_buckets_num);
             assert( new_position >= 0 );
-            assert(_new_buckets[new_position].type == EMPTY );
+            assert( _new_buckets[new_position].hash  == EMPTY_HASH );
 
             _new_buckets[new_position] = _buckets[i];
             _new_allocated++;
@@ -692,6 +717,8 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         })();
         _buckets = _new_buckets;
         _buckets_num = _new_buckets_num;
+        assert(_popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
+        _mask = _buckets_num - 1;
         _allocated = _new_allocated;
         _deleted = 0;
         _empty = _buckets_num - _allocated;
@@ -709,6 +736,8 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     bool put(K k, V v) @safe {
         if ( !_buckets_num ) {
             _buckets_num = _empty = initial_buckets_num;
+            assert(_popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
+            _mask = _buckets_num - 1;
             _buckets = makeArray!(_Bucket)(allocator, _buckets_num);
             () @trusted {GC.addRange(_buckets.ptr, _buckets_num * _Bucket.sizeof);}();
         }
@@ -725,8 +754,8 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         }
 
 
-        immutable computed_hash = hash_function(k);
-        immutable start_index = computed_hash % _buckets_num;
+        immutable computed_hash = hash_function(k) & HASH_MASK;
+        immutable start_index = computed_hash & _mask;
         immutable placement_index = findUpdateIndex(start_index, computed_hash, k);
         assert(placement_index >= 0);
 
@@ -740,7 +769,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         else
         {
             () @nogc @trusted {debug(cachetools) tracef("place with allocation buckets[%d] '%s'='%s'", placement_index, k, v);}();
-            if (_buckets[placement_index].type == ALLOCATED )
+            if ( (_buckets[placement_index].hash & TYPE_MASK) == ALLOCATED_HASH )
             {
                 // we just replace what we already allocated
                 *(_buckets[placement_index].value_ptr) = v;
@@ -752,8 +781,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
                 _buckets[placement_index].value_ptr = p;
             }
         }
-        _buckets[placement_index].type = ALLOCATED;
-        _buckets[placement_index].hash = computed_hash;
+        _buckets[placement_index].hash = computed_hash | ALLOCATED_HASH;
         _buckets[placement_index].key = k;
         _allocated++;
         _empty--;
@@ -859,15 +887,15 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
 
         () @nogc @trusted {debug(cachetools) tracef("remove k: %s", k);}();
 
-        immutable computed_hash = hash_function(k);
-        immutable start_index = computed_hash % _buckets_num;
+        immutable computed_hash = hash_function(k) & HASH_MASK;
+        immutable start_index = computed_hash & _mask;
         immutable lookup_index = findEntryIndex(start_index, computed_hash, k);
         if ( lookup_index == -1) {
             // nothing to remove
             return false;
         }
 
-        assert(_buckets[lookup_index].type == ALLOCATED, "tried to remove non allocated bucket");
+        assert((_buckets[lookup_index].hash & TYPE_MASK) == ALLOCATED_HASH, "tried to remove non allocated bucket");
 
         static if ( InlineValueOrClass )
         {
@@ -880,31 +908,29 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
             (() @trusted {dispose(allocator, _buckets[lookup_index].value_ptr);})();
             _buckets[lookup_index].value_ptr = null;
         }
-        
-        immutable next_index = (lookup_index + 1) % _buckets_num;
-        // if next bucket is free, then we can convert all DELETED buckets staring from current to EMPTY buckets
-        if ( _buckets[next_index].type == EMPTY )
+
+        _allocated--;
+        _empty++;
+        immutable next_index = (lookup_index + 1) & _mask;
+        // if next bucket is EMPTY, then we can convert all DELETED buckets staring from current to EMPTY buckets
+        if ( _buckets[next_index].hash == EMPTY_HASH )
         {
-            _buckets[lookup_index].type = EMPTY;
-            _allocated--;
-            _empty++;
-            auto free_index = (lookup_index - 1) % _buckets_num;
+            _buckets[lookup_index].hash = EMPTY_HASH;
+            auto free_index = (lookup_index - 1) & _mask;
             while (free_index != lookup_index) {
-                if ( _buckets[free_index].type != DELETED ) {
+                if ( _buckets[free_index].hash != DELETED_HASH ) {
                     break;
                 }
-                _buckets[free_index].type = EMPTY;
+                _buckets[free_index].hash = EMPTY_HASH;
                 _deleted--;
                 _empty++;
-                free_index = (free_index - 1) % _buckets_num;
+                free_index = (free_index - 1) & _mask;
             }
             assert(free_index != lookup_index, "table full of deleted buckets?");
         }
         else
         {
-            _buckets[lookup_index].type = DELETED;
-            _deleted++;
-            _allocated--;
+            _buckets[lookup_index].hash = DELETED_HASH;
         }
         return true;
     }
@@ -923,7 +949,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
                 _buckets = _b;
                 _buckets_num = _b.length;
                 _pos = 0;
-                while( _pos < _buckets_num  && _buckets[_pos].type != ALLOCATED )
+                while( _pos < _buckets_num  && (_buckets[_pos].hash & TYPE_MASK) != ALLOCATED_HASH )
                 {
                     _pos++;
                 }
@@ -939,7 +965,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
             void popFront()
             {
                 _pos++;
-                while( _pos < _buckets_num && _buckets[_pos].type != ALLOCATED )
+                while( _pos < _buckets_num && (_buckets[_pos].hash & TYPE_MASK) != ALLOCATED_HASH )
                 {
                     _pos++;
                 }
