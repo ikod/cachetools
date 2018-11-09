@@ -486,9 +486,9 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
 
     enum initial_buckets_num = 32;
     enum grow_factor = 2;
-    enum inlineValues = SmallValueFootprint!V();
+    enum inlineValues = true;//SmallValueFootprint!V();
     enum InlineValueOrClass = inlineValues || is(V==class);
-    enum overload_threshold = 0.6;
+    enum overload_threshold = 0.75;
     enum deleted_threshold = 0.2;
 
     static assert(hash_t.sizeof == 8);
@@ -637,19 +637,22 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     /// Find unallocated entry in the buckets slice
     /// We use this function during resize() only.
     ///
-    package long findEmptyIndexExtended(const long start_index, in ref _Bucket[] buckets, int buckets_num) pure const @safe @nogc 
+    package long findEmptyIndexExtended(const long start_index, in ref _Bucket[] buckets, int new_mask) pure const @safe @nogc 
     {
         long index = start_index;
 
         do {
             immutable t = buckets[index].hash;
+
+            () @nogc @trusted {debug(cachetools) tracef("test empty index %d (%s)", 
+                index, buckets[index]);}();
             
             if ( t <= DELETED_HASH ) // empty or deleted
             {
                 return index;
             }
 
-            index = (index + 1) & _mask;
+            index = (index + 1) & new_mask;
         } while(index != start_index);
         return -1;
     }
@@ -691,7 +694,6 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     void doResize(int dest) @safe {
         immutable _new_buckets_num = dest;
         immutable _new_mask = dest - 1;
-        int _new_allocated = 0;
         _Bucket[] _new_buckets = makeArray!(_Bucket)(allocator, _new_buckets_num);
         () @trusted {GC.addRange(_new_buckets.ptr, _new_buckets_num * _Bucket.sizeof);}();
         // iterate over entries
@@ -699,17 +701,17 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         () @nogc {debug(cachetools) tracef("start resizing: old loadfactor: %s", (1.0*_allocated) / _buckets_num);}();
         for(int i=0;i<_buckets_num;i++) {
             immutable h = _buckets[i].hash;
-            if ( h <= DELETED_HASH ) { // empty or deleted
+            if ( h < ALLOCATED_HASH ) { // empty or deleted
                 continue;
             }
 
             immutable start_index = h & _new_mask;
-            immutable new_position = findEmptyIndexExtended(start_index, _new_buckets, _new_buckets_num);
+            immutable new_position = findEmptyIndexExtended(start_index, _new_buckets, _new_mask);
+            () @nogc {debug(cachetools) tracef("old hash: %0x, old pos: %d, new_pos: %d", h, i, new_position);}();
             assert( new_position >= 0 );
             assert( _new_buckets[new_position].hash  == EMPTY_HASH );
 
             _new_buckets[new_position] = _buckets[i];
-            _new_allocated++;
         }
         (() @trusted {
             GC.removeRange(_buckets.ptr);
@@ -719,7 +721,6 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         _buckets_num = _new_buckets_num;
         assert(_popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
         _mask = _buckets_num - 1;
-        _allocated = _new_allocated;
         _deleted = 0;
         _empty = _buckets_num - _allocated;
         () @nogc {debug(cachetools) trace("resizing done");}();
@@ -758,6 +759,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         immutable start_index = computed_hash & _mask;
         immutable placement_index = findUpdateIndex(start_index, computed_hash, k);
         assert(placement_index >= 0);
+        immutable h = _buckets[placement_index].hash;
 
         () @nogc @trusted {debug(cachetools) tracef("start_index: %d, placement_index: %d", start_index, placement_index);}();
 
@@ -781,10 +783,13 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
                 _buckets[placement_index].value_ptr = p;
             }
         }
+        if ( h < ALLOCATED_HASH )
+        {
+            _allocated++;
+            _empty--;
+        }
         _buckets[placement_index].hash = computed_hash | ALLOCATED_HASH;
         _buckets[placement_index].key = k;
-        _allocated++;
-        _empty--;
         return true;
     }
 
@@ -1061,23 +1066,23 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     globalLogLevel = LogLevel.info;
 }
 
-@safe unittest {
-    globalLogLevel = LogLevel.info;
-    static int i;
-    () @safe @nogc {
-        struct LargeStruct {
-            ulong a;
-            ulong b;
-            ~this() @safe @nogc {
-                i++;
-            }
-        }
-        OAHashMap!(int, LargeStruct) int2LagreStruct;
-        int2LagreStruct.put(1, LargeStruct(1,2));
-    }();
-    assert(i == 3, "i=%d".format(i));
-    globalLogLevel = LogLevel.info;
-}
+//@safe unittest {
+//    globalLogLevel = LogLevel.info;
+//    static int ii = 0;
+//    () @safe @nogc {
+//        struct LargeStruct {
+//            ulong a;
+//            ulong b;
+//            ~this() @safe @nogc {
+//                ii++;
+//            }
+//        }
+//        OAHashMap!(int, LargeStruct) int2LagreStruct;
+//        int2LagreStruct.put(1, LargeStruct(1,2));
+//    }();
+//    assert(ii == 3, "i=%d".format(ii));
+//    globalLogLevel = LogLevel.info;
+//}
 
 @safe unittest {
     import std.experimental.allocator.gc_allocator;
@@ -1178,4 +1183,30 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     {
         writeln(k);
     }
+}
+
+unittest {
+    import std.random;
+    import std.array;
+    import std.algorithm.sorting;
+    import std.stdio;
+
+    enum iterations = 400_000;
+
+    globalLogLevel = LogLevel.info;
+
+    OAHashMap!(int, int) HashMap;
+    int[int]             AA;
+
+    auto rnd = Random(unpredictableSeed);
+
+    foreach(i;0..iterations) {
+        int k = uniform(0, iterations, rnd);
+        HashMap.put(k, i);
+        AA[k] = i;
+    }
+    //writeln(AA.keys().sort());
+    //writeln(HashMap.byKey().array.sort());
+    assert(equals(AA.keys().sort(), HashMap.byKey().array.sort()));
+    assert(AA.length == HashMap.length);
 }
