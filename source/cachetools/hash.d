@@ -11,7 +11,12 @@ ulong hash_function(T)(in T v) @nogc @trusted {
     // https://github.com/dlang/druntime/blob/master/src/core/internal/hash.d
     //
     static if ( isNumeric!T ) {
-        return v;
+        enum m = 0x5bd1e995;
+        hash_t h = v;
+        h ^= h >> 13;
+        h *= m;
+        h ^= h >> 15;
+        return h;
     }
     else static if ( is(T == string) ) {
         // FNV-1a hash
