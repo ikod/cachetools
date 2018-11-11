@@ -446,7 +446,7 @@ package bool SmallValueFootprint(V)() {
         return false;
 }
 
-private bool equals(K)(K a, K b)
+private bool keyEquals(K)(K a, K b)
 {
     static if ( is(K==class) )
     {
@@ -593,7 +593,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
                 break;
             }
 
-            if ( h >= ALLOCATED_HASH && (h & HASH_MASK) == hash && equals(_buckets[index].key, key) ) {
+            if ( h >= ALLOCATED_HASH && (h & HASH_MASK) == hash && keyEquals(_buckets[index].key, key) ) {
                 () @nogc {debug(cachetools) tracef("test entry index %d for key %s - success", index, key);}();
                 return index;
             }
@@ -624,7 +624,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
                 return index;
             }
             assert((h & TYPE_MASK) == ALLOCATED_HASH);
-            if ( (h & HASH_MASK) == computed_hash && equals(_buckets[index].key, key) ) 
+            if ( (h & HASH_MASK) == computed_hash && keyEquals(_buckets[index].key, key) ) 
             {
                 () @nogc @trusted {debug(cachetools) tracef("test update index %d (%s) for key %s - success", index, _buckets[index], key);}();
                 return index;
@@ -678,17 +678,18 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     }
 
     bool tooMuchDeleted() pure const @safe @nogc {
-        if ( (1.0*_deleted) / _buckets_num > deleted_threshold ) {
-            return true;
-        }
-        return false;
+        //
+        // _deleted > _buckets_num / 8
+        //
+        return _deleted << 3 > _buckets_num;
     }
 
     bool tooHighLoad() pure const @safe @nogc {
-        if ( (1.0*_allocated) / _buckets_num > overload_threshold ) {
-            return true;
-        }
-        return false;
+        //
+        // _allocated/_buckets_num > 0.8
+        // 5 * allocated > 4 * buckets_num
+        //
+        return _allocated + (_allocated << 2) > _buckets_num << 2;
     }
 
     void doResize(int dest) @safe {
@@ -954,7 +955,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
                 _buckets = _b;
                 _buckets_num = _b.length;
                 _pos = 0;
-                while( _pos < _buckets_num  && (_buckets[_pos].hash & TYPE_MASK) != ALLOCATED_HASH )
+                while( _pos < _buckets_num  && _buckets[_pos].hash < ALLOCATED_HASH )
                 {
                     _pos++;
                 }
@@ -970,7 +971,79 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
             void popFront()
             {
                 _pos++;
-                while( _pos < _buckets_num && (_buckets[_pos].hash & TYPE_MASK) != ALLOCATED_HASH )
+                while( _pos < _buckets_num && _buckets[_pos].hash <  ALLOCATED_HASH )
+                {
+                    _pos++;
+                }
+            }
+        }
+        return _kvRange(_buckets);
+    }
+    auto byValue() pure
+    {
+        struct _kvRange {
+            int         _pos;
+            ulong       _buckets_num;
+            _Bucket[]   _buckets;
+            this(_Bucket[] _b)
+            {
+                _buckets = _b;
+                _buckets_num = _b.length;
+                _pos = 0;
+                while( _pos < _buckets_num  && _buckets[_pos].hash < ALLOCATED_HASH )
+                {
+                    _pos++;
+                }
+            }
+            bool empty() const pure @safe @nogc
+            {
+                return _pos == _buckets_num;
+            }
+            V front()
+            {
+                return _buckets[_pos].value;
+            }
+            void popFront()
+            {
+                _pos++;
+                while( _pos < _buckets_num && _buckets[_pos].hash < ALLOCATED_HASH )
+                {
+                    _pos++;
+                }
+            }
+        }
+        return _kvRange(_buckets);
+    }
+    auto byPair() pure
+    {
+        import std.typecons;
+
+        struct _kvRange {
+            int         _pos;
+            ulong       _buckets_num;
+            _Bucket[]   _buckets;
+            this(_Bucket[] _b)
+            {
+                _buckets = _b;
+                _buckets_num = _b.length;
+                _pos = 0;
+                while( _pos < _buckets_num  && _buckets[_pos].hash < ALLOCATED_HASH )
+                {
+                    _pos++;
+                }
+            }
+            bool empty() const pure @safe @nogc
+            {
+                return _pos == _buckets_num;
+            }
+            auto front()
+            {
+                return Tuple!(K, "key", V, "value")(_buckets[_pos].key, _buckets[_pos].value);
+            }
+            void popFront()
+            {
+                _pos++;
+                while( _pos < _buckets_num && _buckets[_pos].hash < ALLOCATED_HASH )
                 {
                     _pos++;
                 }
@@ -1039,8 +1112,6 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
 
         OAHashMap!(int, string) int2string;
         auto u = int2string.put(1, "one");
-        assert(int2string.findEmptyIndex(1) == 2);
-        assert(int2string.findUpdateIndex(1, 1, 1) == 1);
         {
             auto v = 1 in int2string;
             assert(v !is null);
@@ -1049,13 +1120,11 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         assert(2 !in int2string);
         u = int2string.put(32+1, "33");
         assert(33 in int2string);
-        assert(int2string.findUpdateIndex(1, hash_function(33), 33) == 2);
         assert(int2string.remove(33));
         assert(!int2string.remove(33));
         
         OAHashMap!(int, LargeStruct) int2LagreStruct;
         u = int2LagreStruct.put(1, LargeStruct(1,2));
-        assert(int2LagreStruct.findEmptyIndex(1) == 2);
         {
             auto v = 1 in int2LagreStruct;
             assert(v !is null);
@@ -1174,21 +1243,26 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
 
 @safe unittest
 {
+    import std.algorithm;
+    import std.array;
     import std.stdio;
+
     OAHashMap!(int, string) m;
     m.put(1, "one");
-    m.put(10, "ten");
     m.put(2, "two");
-    foreach(k; m.byKey)
-    {
-        writeln(k);
-    }
+    m.put(10, "ten");
+    assert(equal(m.byKey.array.sort, [1,2,10]));
+    assert(equal(m.byValue.array.sort, ["one", "ten", "two"]));
+    assert(equal(
+        m.byPair.map!"tuple(a.key, a.value)".array.sort, 
+        [tuple(1, "one"), tuple(2, "two"), tuple(10, "ten")]
+    ));
 }
 
 unittest {
     import std.random;
     import std.array;
-    import std.algorithm.sorting;
+    import std.algorithm;
     import std.stdio;
 
     enum iterations = 400_000;
@@ -1207,6 +1281,6 @@ unittest {
     }
     //writeln(AA.keys().sort());
     //writeln(HashMap.byKey().array.sort());
-    assert(equals(AA.keys().sort(), HashMap.byKey().array.sort()));
+    assert(equal(AA.keys().sort(), HashMap.byKey().array.sort()));
     assert(AA.length == HashMap.length);
 }
