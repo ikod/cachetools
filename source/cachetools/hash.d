@@ -5,7 +5,14 @@ import std.stdio;
 import std.format;
 import std.typecons;
 
-ulong hash_function(T)(in T v) @nogc @trusted {
+ulong hash_function(T)(in T v) /* @nogc @safe inferred from class toHash */ if (is(T == class)) 
+{
+    return v.toHash();
+}
+
+ulong hash_function(T)(in T v) @nogc @trusted if ( !is(T == class) )
+
+{
     //
     // XXX this must be changed to core.internal.hash.hashOf when it become @nogc
     // https://github.com/dlang/druntime/blob/master/src/core/internal/hash.d
@@ -27,7 +34,13 @@ ulong hash_function(T)(in T v) @nogc @trusted {
             h *= 0x100000001b3;
         }
         return h;
-    } else {
+    }
+    else static if (is(T == class))
+    {
+        return v.toHash();
+    }
+    else
+    {
         const(ubyte)[] bytes = (() @trusted => (cast(const(ubyte)*)&v)[0 .. T.sizeof])();
         hash_t h = 0xcbf29ce484222325;
         foreach (const ubyte c; bytes)

@@ -405,17 +405,35 @@ private import cachetools.containers.lists;
 @safe unittest {
     class A {
         int v;
-        override bool opEquals(Object o) const @safe @nogc nothrow {
-            auto other = cast(A)o;
-            return v == other.v;
+        //override bool opEquals(Object o) const @safe @nogc nothrow {
+        //    auto other = cast(A)o;
+        //    return v == other.v;
+        //}
+        bool opEquals(const A o) pure const @safe @nogc nothrow {
+            return v == o.v;
         }
-        override hash_t toHash() const @safe @nogc nothrow {
-            return 1;
+        hash_t hash() const @safe @nogc nothrow {
+            return hash_function(v);
+        }
+        override hash_t toHash() const @safe @nogc {
+            return hash_function(v);
+        }
+        this(int v)
+        {
+            this.v = v;
+        }
+        override string toString() const
+        {
+            import std.format;
+            return "A(%d)".format(v);
         }
     }
-    auto x = new A();
-    auto y = new A();
-    //HashMap!(A, string) dict;
+    auto x = new A(1);
+    auto y = new A(2);
+    OAHashMap!(A, string) dict;
+    dict.put(x, "x");
+    dict.put(y, "y");
+    
 }
 
 ///
@@ -446,7 +464,7 @@ package bool SmallValueFootprint(V)() {
         return false;
 }
 
-private bool keyEquals(K)(K a, K b)
+private bool keyEquals(K)(const K a, const K b)
 {
     static if ( is(K==class) )
     {
@@ -587,14 +605,14 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         do {
             immutable h = _buckets[index].hash;
 
-            () @nogc {debug(cachetools) tracef("test entry index %d (%s) for key %s", index, _buckets[index].toString, key);}();
+            () @nogc @trusted {debug(cachetools) tracef("test entry index %d (%s) for key %s", index, _buckets[index].toString, key);}();
 
             if ( h == EMPTY_HASH ) {
                 break;
             }
 
             if ( h >= ALLOCATED_HASH && (h & HASH_MASK) == hash && keyEquals(_buckets[index].key, key) ) {
-                () @nogc {debug(cachetools) tracef("test entry index %d for key %s - success", index, key);}();
+                //() @nogc {debug(cachetools) tracef("test entry index %d for key %s - success", index, key);}();
                 return index;
             }
             index = (index + 1) & _mask;
@@ -750,11 +768,6 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
             doResize(grow_factor * _buckets_num);
         }
 
-        if ( tooMuchDeleted ) {
-            // do not shrink, just compact table
-            doResize(_buckets_num);
-        }
-
 
         immutable computed_hash = hash_function(k) & HASH_MASK;
         immutable start_index = computed_hash & _mask;
@@ -890,6 +903,13 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     //}
 
     bool remove(K k) @safe {
+        import std.stdio;
+        ////writefln("remove %s, deleted: %s", k, _deleted);
+        if ( tooMuchDeleted ) {
+            // do not shrink, just compact table
+            doResize(_buckets_num);
+        }
+
 
         () @nogc @trusted {debug(cachetools) tracef("remove k: %s", k);}();
 
@@ -916,11 +936,11 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         }
 
         _allocated--;
-        _empty++;
         immutable next_index = (lookup_index + 1) & _mask;
-        // if next bucket is EMPTY, then we can convert all DELETED buckets staring from current to EMPTY buckets
+        // if next bucket is EMPTY, then we can convert all DELETED buckets down staring from current to EMPTY buckets
         if ( _buckets[next_index].hash == EMPTY_HASH )
         {
+            _empty++;
             _buckets[lookup_index].hash = EMPTY_HASH;
             auto free_index = (lookup_index - 1) & _mask;
             while (free_index != lookup_index) {
@@ -937,13 +957,21 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         else
         {
             _buckets[lookup_index].hash = DELETED_HASH;
+            _deleted++;
         }
         return true;
     }
+
     auto length() const pure nothrow @nogc @safe
     {
         return _allocated;
     }
+
+    auto size() const pure nothrow @nogc @safe
+    {
+        return _buckets_num;
+    }
+
     auto byKey() pure @safe @nogc
     {
         struct _kvRange {
@@ -979,6 +1007,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         }
         return _kvRange(_buckets);
     }
+
     auto byValue() pure
     {
         struct _kvRange {
@@ -1001,7 +1030,14 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
             }
             V front()
             {
-                return _buckets[_pos].value;
+                static if (inlineValues)
+                {
+                    return _buckets[_pos].value;
+                }
+                else
+                {
+                    return *(_buckets[_pos].value_ptr);
+                }
             }
             void popFront() pure nothrow @safe @nogc
             {
@@ -1014,6 +1050,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         }
         return _kvRange(_buckets);
     }
+
     auto byPair() pure
     {
         import std.typecons;
@@ -1038,7 +1075,14 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
             }
             auto front() @safe
             {
-                return Tuple!(K, "key", V, "value")(_buckets[_pos].key, _buckets[_pos].value);
+                static if (inlineValues)
+                {
+                    return Tuple!(K, "key", V, "value")(_buckets[_pos].key, _buckets[_pos].value);
+                }
+                else
+                {
+                    return Tuple!(K, "key", V, "value")(_buckets[_pos].key, *(_buckets[_pos].value_ptr));
+                }
             }
             void popFront() pure nothrow @safe @nogc
             {
@@ -1135,24 +1179,6 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     globalLogLevel = LogLevel.info;
 }
 
-//@safe unittest {
-//    globalLogLevel = LogLevel.info;
-//    static int ii = 0;
-//    () @safe @nogc {
-//        struct LargeStruct {
-//            ulong a;
-//            ulong b;
-//            ~this() @safe @nogc {
-//                ii++;
-//            }
-//        }
-//        OAHashMap!(int, LargeStruct) int2LagreStruct;
-//        int2LagreStruct.put(1, LargeStruct(1,2));
-//    }();
-//    assert(ii == 3, "i=%d".format(ii));
-//    globalLogLevel = LogLevel.info;
-//}
-
 @safe unittest {
     import std.experimental.allocator.gc_allocator;
     globalLogLevel = LogLevel.info;
@@ -1192,9 +1218,12 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         int a;
         this(int a)
         {
-            a = a;
+            this.a = a;
         }
-
+        override hash_t toHash() const pure @nogc @safe
+        {
+            return hash_function(a);
+        }
         bool opEquals(const c other) pure const @safe @nogc
         {
             return this is other || this.a == other.a;
@@ -1220,10 +1249,15 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         int a;
         this(int a)
         {
-            a = a;
+            this.a = a;
+        }
+        override hash_t toHash() const pure @safe
+        {
+            int[] _ = [1, 2, 3]; // this cause GC
+            return hash_function(a);
         }
 
-        bool opEquals(const c other) pure const @safe
+        bool opEquals(const c other) const pure @safe
         {
             auto _ = [1,2,3]; // this cause GC
             return this is other || this.a == other.a;
@@ -1248,8 +1282,8 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     import std.stdio;
 
     OAHashMap!(int, string) m;
-    m.put(1, "one");
-    m.put(2, "two");
+    m.put(1,  "one");
+    m.put(2,  "two");
     m.put(10, "ten");
     assert(equal(m.byKey.array.sort, [1,2,10]));
     assert(equal(m.byValue.array.sort, ["one", "ten", "two"]));
@@ -1257,6 +1291,16 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         m.byPair.map!"tuple(a.key, a.value)".array.sort, 
         [tuple(1, "one"), tuple(2, "two"), tuple(10, "ten")]
     ));
+    m.remove(1);
+    m.remove(10);
+    assert(equal(
+    m.byPair.map!"tuple(a.key, a.value)".array.sort,
+        [tuple(2, "two")]
+    ));
+    m.remove(2);
+    assert(m.byPair.map!"tuple(a.key, a.value)".array.sort.length() == 0);
+    m.remove(2);
+    assert(m.byPair.map!"tuple(a.key, a.value)".array.sort.length() == 0);
 }
 
 unittest {
@@ -1282,5 +1326,6 @@ unittest {
     //writeln(AA.keys().sort());
     //writeln(HashMap.byKey().array.sort());
     assert(equal(AA.keys().sort(), HashMap.byKey().array.sort()));
-    assert(AA.length == HashMap.length);
+    assert(equal(AA.values().sort(), HashMap.byValue().array.sort()));
+    //assert(equal(AA.length, HashMap.length));
 }

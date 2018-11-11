@@ -1,0 +1,13 @@
+{
+    "name": "testhash",
+    "authors": [
+        "Igor Khasilev"
+    ],
+    "dependencies": {
+        "cachetools": "*",
+        "emsi_containers": "*"
+    },
+    "description": "Performance tests for hash tables",
+    "copyright": "Copyright © 2018, Igor Khasilev",
+    "license": "MIT"
+}
