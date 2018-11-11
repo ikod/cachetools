@@ -577,9 +577,9 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     /// Find allocated bucket for given key and computed hash starting from start_index
     /// Returns: nonnegative index if bucket found or -1 otherwise
     ///
-    /// Inherits @nogc and @safe from K opEquals()
+    /// Inherits @nogc and from K opEquals()
     ///
-    package long findEntryIndex(const long start_index, const hash_t hash, in K key) pure const
+    package long findEntryIndex(const long start_index, const hash_t hash, in K key) pure const @safe
     in { assert(hash < DELETED_HASH); }
     do {
         long index = start_index;
@@ -607,9 +607,9 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     /// bucket for key k and precomputed hash starting from start_index
     ///
     ///
-    /// Inherits @nogc and @safe from K opEquals()
+    /// Inherits @nogc from K opEquals()
     ///
-    package long findUpdateIndex(const long start_index, const hash_t computed_hash, in K key) pure const 
+    package long findUpdateIndex(const long start_index, const hash_t computed_hash, in K key) pure const @safe
     in { assert(computed_hash < DELETED_HASH); }
     do {
         long index = start_index;
@@ -944,7 +944,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     {
         return _allocated;
     }
-    auto byKey() pure
+    auto byKey() pure @safe @nogc
     {
         struct _kvRange {
             int         _pos;
@@ -960,7 +960,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
                     _pos++;
                 }
             }
-            bool empty() const pure @safe @nogc
+            bool empty() const pure nothrow @safe @nogc
             {
                 return _pos == _buckets_num;
             }
@@ -968,7 +968,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
             {
                 return _buckets[_pos].key;
             }
-            void popFront()
+            void popFront() pure nothrow @safe @nogc
             {
                 _pos++;
                 while( _pos < _buckets_num && _buckets[_pos].hash <  ALLOCATED_HASH )
@@ -995,7 +995,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
                     _pos++;
                 }
             }
-            bool empty() const pure @safe @nogc
+            bool empty() const pure nothrow @safe @nogc
             {
                 return _pos == _buckets_num;
             }
@@ -1003,7 +1003,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
             {
                 return _buckets[_pos].value;
             }
-            void popFront()
+            void popFront() pure nothrow @safe @nogc
             {
                 _pos++;
                 while( _pos < _buckets_num && _buckets[_pos].hash < ALLOCATED_HASH )
@@ -1032,15 +1032,15 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
                     _pos++;
                 }
             }
-            bool empty() const pure @safe @nogc
+            bool empty() const pure nothrow @safe @nogc
             {
                 return _pos == _buckets_num;
             }
-            auto front()
+            auto front() @safe
             {
                 return Tuple!(K, "key", V, "value")(_buckets[_pos].key, _buckets[_pos].value);
             }
-            void popFront()
+            void popFront() pure nothrow @safe @nogc
             {
                 _pos++;
                 while( _pos < _buckets_num && _buckets[_pos].hash < ALLOCATED_HASH )
