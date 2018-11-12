@@ -5,9 +5,11 @@ During tests set up phase two arrays of 1_000_000 random integers
 
 Results description:
 
-Table type - internal associative array, OAHashMap - this package imlementation (using Mallocator),
-
-OAHashMap+GC - this package implementation(using GCAllocator), HashMap - emsi_containers hash map.
+Table type - four options:
+* internal associative array
+* OAHashMap - this package imlementation (using Mallocator),
+* OAHashMap+GC - this package implementation(using GCAllocator),
+* HashMap - emsi_containers hash map.
 
 Time - time required for test. Less is better.
 
