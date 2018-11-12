@@ -1,9 +1,12 @@
 ## This is performance tester for hash table ##
 
-During tests set up two arrays of 1_000_000 random integers each ('write array' and 'read array') are created.
+During tests set up phase two arrays of 1_000_000 random integers
+('write array' and 'read array') are created. This arrays used in subsequent tests.
 
 Results description:
-Table type - can be internal associative array, OAHashMap - this package imlementation (using Mallocator),
+
+Table type - internal associative array, OAHashMap - this package imlementation (using Mallocator),
+
 OAHashMap+GC - this package implementation(using GCAllocator), HashMap - emsi_containers hash map.
 
 Time - time required for test. Less is better.
@@ -25,7 +28,7 @@ Memory - diff betwee GC.stat.used after and before test.
 
 ### Test #2 ###
 1. place 'write' array into hash table.
-1. remove keys (list of keys for deletion formed from the 'raad array') from the table.
+1. remove keys (list of keys for deletion formed from the 'read array') from the table.
 1. lookup integers from 'write array' in the table.
 
 
