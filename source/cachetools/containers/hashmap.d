@@ -428,6 +428,7 @@ private import cachetools.containers.lists;
             return "A(%d)".format(v);
         }
     }
+    globalLogLevel = LogLevel.info;
     auto x = new A(1);
     auto y = new A(2);
     OAHashMap!(A, string) dict;
@@ -509,15 +510,24 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     enum overload_threshold = 0.75;
     enum deleted_threshold = 0.2;
 
-    static assert(hash_t.sizeof == 8);
-
     private {
         alias   allocator = Allocator.instance;
-        enum    EMPTY_HASH =     0x00_00_00_00_00_00_00_00;
-        enum    DELETED_HASH =   0x10_00_00_00_00_00_00_00;
-        enum    ALLOCATED_HASH = 0x20_00_00_00_00_00_00_00;
-        enum    TYPE_MASK =      0xF0_00_00_00_00_00_00_00;
-        enum    HASH_MASK =      0x0F_FF_FF_FF_FF_FF_FF_FF;
+        static if (hash_t.sizeof == 8)
+        {
+            enum    EMPTY_HASH =     0x00_00_00_00_00_00_00_00;
+            enum    DELETED_HASH =   0x10_00_00_00_00_00_00_00;
+            enum    ALLOCATED_HASH = 0x20_00_00_00_00_00_00_00;
+            enum    TYPE_MASK =      0xF0_00_00_00_00_00_00_00;
+            enum    HASH_MASK =      0x0F_FF_FF_FF_FF_FF_FF_FF;
+        }
+        else static if (hash_t.sizeof == 4)
+        {
+            enum    EMPTY_HASH =     0x00_00_00_00;
+            enum    DELETED_HASH =   0x10_00_00_00;
+            enum    ALLOCATED_HASH = 0x20_00_00_00;
+            enum    TYPE_MASK =      0xF0_00_00_00;
+            enum    HASH_MASK =      0x0F_FF_FF_FF;
+        }
 
         struct  _Bucket {
             hash_t  hash;
@@ -578,8 +588,8 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     /// Find any unallocated bucket starting from start_index (inclusive)
     /// Returns non-negative index in success or -1 on fail
     ///
-    package long findEmptyIndex(const long start_index) pure const @safe @nogc {
-        long index = start_index;
+    package hash_t findEmptyIndex(const hash_t start_index) pure const @safe @nogc {
+        hash_t index = start_index;
 
         do {
             () @nogc {debug(cachetools) tracef("test index %d for non-ALLOCATED", index);}();
@@ -597,10 +607,10 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     ///
     /// Inherits @nogc and from K opEquals()
     ///
-    package long findEntryIndex(const long start_index, const hash_t hash, in K key) pure const @safe
+    package hash_t findEntryIndex(const hash_t start_index, const hash_t hash, in K key) pure const @safe
     in { assert(hash < DELETED_HASH); }
     do {
-        long index = start_index;
+        hash_t index = start_index;
 
         do {
             immutable h = _buckets[index].hash;
@@ -627,10 +637,10 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     ///
     /// Inherits @nogc from K opEquals()
     ///
-    package long findUpdateIndex(const long start_index, const hash_t computed_hash, in K key) pure const @safe
+    package hash_t findUpdateIndex(const hash_t start_index, const hash_t computed_hash, in K key) pure const @safe
     in { assert(computed_hash < DELETED_HASH); }
     do {
-        long index = start_index;
+        hash_t index = start_index;
 
         do {
             immutable h = _buckets[index].hash;
@@ -655,9 +665,9 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     /// Find unallocated entry in the buckets slice
     /// We use this function during resize() only.
     ///
-    package long findEmptyIndexExtended(const long start_index, in ref _Bucket[] buckets, int new_mask) pure const @safe @nogc 
+    package long findEmptyIndexExtended(const hash_t start_index, in ref _Bucket[] buckets, int new_mask) pure const @safe @nogc 
     {
-        long index = start_index;
+        hash_t index = start_index;
 
         do {
             immutable t = buckets[index].hash;
@@ -719,18 +729,18 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         () @nogc {debug(cachetools) trace("start resizing");}();
         () @nogc {debug(cachetools) tracef("start resizing: old loadfactor: %s", (1.0*_allocated) / _buckets_num);}();
         for(int i=0;i<_buckets_num;i++) {
-            immutable h = _buckets[i].hash;
+            immutable hash_t h = _buckets[i].hash;
             if ( h < ALLOCATED_HASH ) { // empty or deleted
                 continue;
             }
 
-            immutable start_index = h & _new_mask;
+            immutable hash_t start_index = h & _new_mask;
             immutable new_position = findEmptyIndexExtended(start_index, _new_buckets, _new_mask);
             () @nogc {debug(cachetools) tracef("old hash: %0x, old pos: %d, new_pos: %d", h, i, new_position);}();
             assert( new_position >= 0 );
-            assert( _new_buckets[new_position].hash  == EMPTY_HASH );
+            assert( _new_buckets[cast(hash_t)new_position].hash  == EMPTY_HASH );
 
-            _new_buckets[new_position] = _buckets[i];
+            _new_buckets[cast(hash_t)new_position] = _buckets[i];
         }
         (() @trusted {
             GC.removeRange(_buckets.ptr);
@@ -1143,7 +1153,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         struct SmallStruct {
             ulong a;
         }
-        assert(SmallValueFootprint!SmallStruct);
+        //assert(SmallValueFootprint!SmallStruct);
         struct LargeStruct {
             ulong a;
             ulong b;
@@ -1152,7 +1162,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         class SmallClass {
             ulong a;
         }
-        assert(!SmallValueFootprint!SmallClass);
+        //assert(!SmallValueFootprint!SmallClass);
 
         OAHashMap!(int, string) int2string;
         auto u = int2string.put(1, "one");

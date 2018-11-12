@@ -5,7 +5,6 @@ import std.algorithm, std.range;
 import std.conv;
 import std.experimental.allocator.gc_allocator;
 import core.memory;
-
 import cachetools.containers.hashmap;
 import containers.hashmap;
 
@@ -378,11 +377,14 @@ void main()
     r = benchmark!(f_oahashmapGC)(trials);
     writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
-    GC.collect();GC.minimize();
-    test = "HashMap!(int, int)";
-    r = benchmark!(f_hashmap)(trials);
-    writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
-
+    version(Posix)
+    {
+        // emsi-containers do not work for me under windows
+        GC.collect();GC.minimize();
+        test = "HashMap!(int, int)";
+        r = benchmark!(f_hashmap)(trials);
+        writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    }
     writeln("---");
 
     GC.collect();GC.minimize();
@@ -400,10 +402,14 @@ void main()
     r = benchmark!(f_oahashmapGC_remove)(trials);
     writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
-    GC.collect();GC.minimize();
-    test = "HashMap!(int,int) rem";
-    r = benchmark!(f_hashmap_remove)(trials);
-    writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    version(Posix)
+    {
+        // emsi-containers do not work for me under windows
+        GC.collect();GC.minimize();
+        test = "HashMap!(int,int) rem";
+        r = benchmark!(f_hashmap_remove)(trials);
+        writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    }
 
     writeln("---");
 
@@ -422,11 +428,14 @@ void main()
     r = benchmark!(OALARGE_GC)(trials);
     writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
-    GC.collect();GC.minimize();
-    test = "HashMap!(int, LARGE)";
-    r = benchmark!(HMLARGE)(trials);
-    writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
-
+    version(Posix)
+    {
+        // emsi-containers do not work for me under windows
+        GC.collect();GC.minimize();
+        test = "HashMap!(int, LARGE)";
+        r = benchmark!(HMLARGE)(trials);
+        writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    }
     writeln("---");
 
     GC.collect();GC.minimize();
@@ -444,8 +453,12 @@ void main()
     r = benchmark!shakespeare_OAHashMapGC(1);
     writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
-    GC.collect();GC.minimize();
-    test = "Shakespeare HashMap";
-    r = benchmark!shakespeare_HashMap(1);
-    writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    version(Posix)
+    {
+        // emsi-containers do not work for me under windows
+        GC.collect();GC.minimize();
+        test = "Shakespeare HashMap";
+        r = benchmark!shakespeare_HashMap(1);
+        writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    }
 }
