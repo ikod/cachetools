@@ -586,7 +586,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     }
     ///
     /// Find any unallocated bucket starting from start_index (inclusive)
-    /// Returns non-negative index in success or -1 on fail
+    /// Returns index on success or hash_t.max on fail
     ///
     package hash_t findEmptyIndex(const hash_t start_index) pure const @safe @nogc {
         hash_t index = start_index;
@@ -599,16 +599,20 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
             }
             index = (index + 1) & _mask;
         } while(index != start_index);
-        return -1;
+        return hash_t.max;
     }
     ///
     /// Find allocated bucket for given key and computed hash starting from start_index
-    /// Returns: nonnegative index if bucket found or -1 otherwise
+    /// Returns: index if bucket found or hash_t.max otherwise
     ///
     /// Inherits @nogc and from K opEquals()
     ///
     package hash_t findEntryIndex(const hash_t start_index, const hash_t hash, in K key) pure const @safe
-    in { assert(hash < DELETED_HASH); }
+    in
+    {
+        assert(hash < DELETED_HASH);
+        assert(start_index < _buckets_num);
+    }
     do {
         hash_t index = start_index;
 
@@ -627,7 +631,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
             }
             index = (index + 1) & _mask;
         } while(index != start_index);
-        return -1;
+        return hash_t.max;
     }
 
     ///
@@ -638,7 +642,11 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     /// Inherits @nogc from K opEquals()
     ///
     package hash_t findUpdateIndex(const hash_t start_index, const hash_t computed_hash, in K key) pure const @safe
-    in { assert(computed_hash < DELETED_HASH); }
+    in 
+    {
+        assert(computed_hash < DELETED_HASH);
+        assert(start_index < _buckets_num);
+    }
     do {
         hash_t index = start_index;
 
@@ -659,13 +667,18 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
             }
             index = (index + 1) & _mask;
         } while(index != start_index);
-        return -1;
+        return hash_t.max;
     }
     ///
     /// Find unallocated entry in the buckets slice
     /// We use this function during resize() only.
     ///
-    package long findEmptyIndexExtended(const hash_t start_index, in ref _Bucket[] buckets, int new_mask) pure const @safe @nogc 
+    package long findEmptyIndexExtended(const hash_t start_index, in ref _Bucket[] buckets, int new_mask) pure const @safe @nogc
+    in
+    {
+        assert(start_index < buckets.length);
+    }
+    do
     {
         hash_t index = start_index;
 
@@ -682,7 +695,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
 
             index = (index + 1) & new_mask;
         } while(index != start_index);
-        return -1;
+        return hash_t.max;
     }
 
     V* opBinaryRight(string op)(in K k) @safe if (op == "in") {
@@ -692,7 +705,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         immutable computed_hash = hash_function(k) & HASH_MASK;
         immutable start_index = computed_hash & _mask;
         immutable lookup_index = findEntryIndex(start_index, computed_hash, k);
-        if ( lookup_index == -1) {
+        if ( lookup_index == hash_t.max) {
             return null;
         }
         static if ( InlineValueOrClass )
@@ -926,7 +939,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
         immutable computed_hash = hash_function(k) & HASH_MASK;
         immutable start_index = computed_hash & _mask;
         immutable lookup_index = findEntryIndex(start_index, computed_hash, k);
-        if ( lookup_index == -1) {
+        if ( lookup_index == hash_t.max ) {
             // nothing to remove
             return false;
         }
@@ -1193,7 +1206,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
     import std.experimental.allocator.gc_allocator;
     globalLogLevel = LogLevel.info;
     static int i;
-    () @safe {
+    () @safe @nogc {
         struct LargeStruct {
             ulong a;
             ulong b;
@@ -1201,7 +1214,7 @@ struct OAHashMap(K, V, Allocator = Mallocator) {
                 i++;
             }
         }
-        OAHashMap!(int, LargeStruct, GCAllocator) int2LagreStruct;
+        OAHashMap!(int, LargeStruct) int2LagreStruct;
         int2LagreStruct.put(1, LargeStruct(1,2));
     }();
     globalLogLevel = LogLevel.info;

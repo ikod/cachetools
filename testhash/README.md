@@ -1,19 +1,23 @@
 ## This is performance tester for hash table ##
 
-During tests set up phase two arrays of 1_000_000 random integers
-('write array' and 'read array') are created. This arrays used in subsequent tests.
+During set up phase two arrays of 1_000_000 random integers
+('write array' and 'read array') were created. This arrays used in subsequent tests.
 
 Results description:
 
 Table type - four options:
 * internal associative array
-* OAHashMap - this package imlementation (using Mallocator),
+* OAHashMap - this package implementation (using Mallocator),
 * OAHashMap+GC - this package implementation(using GCAllocator),
 * HashMap - emsi_containers hash map.
 
 Time - time required for test. Less is better.
 
-Memory - diff betwee GC.stat.used after and before test.
+Memory - diff between GC.stat.used after and before test.
+
+to run tests use: `dub run -b release --compiler ldc2`
+
+setup: ldc2 1.11.0, OSX, MacBook Pro 2015
 
 ### Test #1: ###
 
@@ -29,6 +33,9 @@ Memory - diff betwee GC.stat.used after and before test.
 
 
 ### Test #2 ###
+
+Test performance on entry removal.
+
 1. place 'write' array into hash table.
 1. remove keys (list of keys for deletion formed from the 'read array') from the table.
 1. lookup integers from 'write array' in the table.

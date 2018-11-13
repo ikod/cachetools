@@ -5,17 +5,30 @@ import std.stdio;
 import std.format;
 import std.typecons;
 
-ulong hash_function(T)(in T v) /* @nogc @safe inferred from class toHash */ if (is(T == class)) 
+///
+/// For classes (and structs with toHash method) we use v.toHash() to compute hash.
+/// -------------------------------------------------------------------------------
+/// toHash method CAN BE @nogc or not. HashMap 'nogc' properties is inherited from this method.
+/// toHash method MUST BE @safe or @trusted, as all HashMap code alredy safe.
+///
+/// See also: https://dlang.org/spec/hash-map.html#using_classes_as_key 
+/// and https://dlang.org/spec/hash-map.html#using_struct_as_key
+///
+bool UseToHashMethod(T)() {
+    return (is(T == class) || (is(T==struct) && __traits(compiles, {
+        T v = T.init; hash_t h = v.toHash();
+    })));
+}
+
+hash_t hash_function(T)(in T v) @safe /* @nogc inherited from toHash method */
+if ( UseToHashMethod!T )
 {
     return v.toHash();
 }
 
-hash_t hash_function(T)(in T v) @nogc @trusted if ( !is(T == class) )
+hash_t hash_function(T)(in T v) @nogc @trusted
+if ( !UseToHashMethod!T )
 {
-    //
-    // XXX this must be changed to core.internal.hash.hashOf when it become @nogc
-    // https://github.com/dlang/druntime/blob/master/src/core/internal/hash.d
-    //
     static if ( isNumeric!T ) {
         enum m = 0x5bd1e995;
         hash_t h = v;
@@ -34,13 +47,9 @@ hash_t hash_function(T)(in T v) @nogc @trusted if ( !is(T == class) )
         }
         return cast(hash_t)h;
     }
-    else static if (is(T == class))
-    {
-        return v.toHash();
-    }
     else
     {
-        const(ubyte)[] bytes = (() @trusted => (cast(const(ubyte)*)&v)[0 .. T.sizeof])();
+        const(ubyte)[] bytes = (cast(const(ubyte)*)&v)[0 .. T.sizeof];
         ulong h = 0xcbf29ce484222325;
         foreach (const ubyte c; bytes)
         {
@@ -54,4 +63,21 @@ hash_t hash_function(T)(in T v) @nogc @trusted if ( !is(T == class) )
 @safe unittest
 {
     assert(hash_function("abc") == cast(hash_t)0xe71fa2190541574b);
+
+    struct A0 {}
+    assert(!UseToHashMethod!A0());
+
+    struct A1 {
+        hash_t toHash() const @safe {
+            return 0;
+        }
+    }
+    assert(UseToHashMethod!A1());
+
+    class C0 {
+        override hash_t toHash() const @safe {
+            return 0;
+        }
+    }
+    assert(UseToHashMethod!A1());
 }
