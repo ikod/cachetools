@@ -5,11 +5,11 @@ During set up phase two arrays of 1_000_000 random integers
 
 Results description:
 
-Table type - four options:
-* internal associative array
-* OAHashMap - this package implementation (using Mallocator),
-* OAHashMap+GC - this package implementation(using GCAllocator),
-* HashMap - emsi_containers hash map.
+Hash table - four options:
+* std - dlang AA
+* c.t - this package (cachetools) implementation (using Mallocator),
+* c.t+GC - this package (cachetools) implementation(using GCAllocator),
+* emsi - emsi_containers hash map.
 
 Time - time required for test. Less is better.
 
@@ -24,13 +24,12 @@ setup: ldc2 1.11.0, OSX, MacBook Pro 2015
 1. place 'write' array into hash table
 1. lookup integers from 'read array' in the table.
 
-| table type               | time                          | memory            |
+| hash table               | time                          | memory            |
 |--------------------------|-------------------------------|-------------------|
-|int[int]                  | [292 ms, 490 μs, and 5 hnsecs]|  GC memory Δ 41MB |
-|OAHashMap!(int,int)       | [189 ms, 35 μs, and 9 hnsecs] |  GC memory Δ 0MB  |
-|OAHashMap!(int, int)+GC   | [198 ms, 44 μs, and 3 hnsecs] |  GC memory Δ 16MB |
-|HashMap!(int, int)        | [762 ms, 270 μs, and 4 hnsecs]|  GC memory Δ 0MB  |
-
+|std     | 293 ms and 632 μs               | GC memory Δ 41MB|
+|c.t.    | 190 ms, 70 μs, and 3 hnsecs     | GC memory Δ 0MB|
+|c.t.+GC | 187 ms, 401 μs, and 5 hnsecs    | GC memory Δ 16MB|
+|emsi    | 651 ms, 328 μs, and 7 hnsecs    | GC memory Δ 0MB|
 
 ### Test #2 ###
 
@@ -41,12 +40,12 @@ Test performance on entry removal.
 1. lookup integers from 'write array' in the table.
 
 
-| table type               | time                          | memory            |
+| hash table        | time                          | memory            |
 |--------------------------|-------------------------------|-------------------|
-|int[int] rem              | [373 ms, 710 μs, and 4 hnsecs]|  GC memory Δ 17MB |
-|OAHashMap!(int,int) rem   | [244 ms, 833 μs, and 1 hnsec] |  GC memory Δ 0MB  |
-|OAHashMap!(int,int)+GC rem| [302 ms and 215 μs]           |  GC memory Δ 16MB |
-|HashMap!(int,int) rem     | [781 ms, 627 μs, and 9 hnsecs]|  GC memory Δ 0MB  |
+|std     | 340 ms, 264 μs, and 2 hnsecs    | GC memory Δ 17MB|
+|c.t.    | 232 ms, 126 μs, and 2 hnsecs    | GC memory Δ 0MB|
+|c.t.+GC | 246 ms, 727 μs, and 2 hnsecs    | GC memory Δ 16MB|
+|emsi    | 688 ms, 116 μs, and 6 hnsecs    | GC memory Δ 0MB|
 
 ### Test #3 ###
 
@@ -58,10 +57,10 @@ This is test for both performance and memory management.
 
 | table type               | time                          | memory            |
 |--------------------------|-------------------------------|-------------------|
-|LARGE[int]                | [512 ms, 681 μs, and 1 hnsec] |  GC memory Δ 109MB|
-|OAHashMap!(int, LARGE)    | [465 ms, 336 μs, and 1 hnsec] |  GC memory Δ 0MB  |
-|OAHashMap!(int, LARGE)+GC | [434 ms, 173 μs, and 7 hnsecs]|  GC memory Δ 88MB |
-|HashMap!(int, LARGE)      | [1 sec, 461 ms, 928 μs, and 5]|  GC memory Δ 0MB  |
+|std     | 483 ms and 226 μs               | GC memory Δ 109MB|
+|c.t.    | 414 ms, 165 μs, and 9 hnsecs    | GC memory Δ 0MB|
+|c.t.+GC | 406 ms, 201 μs, and 1 hnsec     | GC memory Δ 88MB|
+|emsi    | 1 sec, 394 ms, 390 μs, and 3 h  | GC memory Δ 0MB|
 
 ### Test #4 ###
 
@@ -69,7 +68,7 @@ Count words in Shakespeare texts (5M file).
 
 | table type               | time                          | memory            |
 |--------------------------|-------------------------------|-------------------|
-|Shakespeare int[string]   | [138 ms, 830 μs, and 3 hnsecs]|  GC memory Δ 5MB  |
-|Shakespeare OAHashMap     | [107 ms, 907 μs, and 7 hnsecs]|  GC memory Δ 1MB  |
-|Shakespeare OAHashMap+GC  | [114 ms, 503 μs, and 8 hnsecs]|  GC memory Δ 5MB  |
-|Shakespeare HashMap       | [296 ms, 557 μs, and 1 hnsec] |  GC memory Δ 1MB  |
+|std     | 141 ms and 366 μs               | GC memory Δ 5MB|
+|c.t.    | 122 ms, 849 μs, and 3 hnsecs    | GC memory Δ 1MB|
+|c.t.+GC | 121 ms, 552 μs, and 8 hnsecs    | GC memory Δ 5MB|
+|emsi    | 305 ms, 993 μs, and 6 hnsecs    | GC memory Δ 1MB|
