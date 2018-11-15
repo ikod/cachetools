@@ -1,11 +1,8 @@
 module cachetools;
 
 public import cachetools.interfaces;
-import cachetools.containers.hashmap;
-
-
-import optional;
-
+public import cachetools.cache;
+public import cachetools.containers.hashmap;
 
 public struct Cache(K, V) {
     private {
@@ -51,9 +48,9 @@ auto makeCache(K, V)(CachePolicy!(K, V) p = null) @safe @nogc {
 }
 
 @safe unittest {
-    import cachetools.fifo;
-    import std.stdio;
-    import std.experimental.logger;
+    //import cachetools.cache;
+    //import std.stdio;
+    //import std.experimental.logger;
     
     //globalLogLevel = LogLevel.info;
     //

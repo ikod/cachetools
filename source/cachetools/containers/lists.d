@@ -5,12 +5,183 @@ private import stdx.allocator.mallocator : Mallocator;
 private import std.experimental.logger;
 private import std.format;
 
+///
+/// N-way multilist
+struct MultiDList(T, int N, Allocator = Mallocator)
+{
+    alias allocator = Allocator.instance;
+    struct Node {
+        T payload;
+        private:
+        Link[N] links;
+        Node* next(size_t i) @safe @nogc
+        {
+            return links[i].next;
+        }
+        Node* prev(size_t i) @safe @nogc
+        {
+            return links[i].prev;
+        }
+        alias payload this;
+    }
+    private 
+    {
+        struct Link
+        {
+            Node* prev;
+            Node* next;
+        }
+        Node*[N]    _heads;
+        Node*[N]    _tails;
+        size_t      _length;
+        
+    }
+    ulong length() const pure nothrow @safe @nogc {
+        return _length;
+    }
+
+    Node* insert_last(T v) @safe nothrow
+    out
+    {
+        assert(_length>0);
+    }
+    do
+    {
+        auto n = make!(Node)(allocator);
+        n.payload = v;
+        static foreach(index;0..N) {
+            if ( _heads[index] is null ) {
+                _heads[index] = n;
+            }
+            n.links[index].prev = _tails[index];
+            if ( _tails[index] !is null )
+            {
+                _tails[index].links[index].next = n;
+            }
+            _tails[index] = n;
+        }
+        _length++;
+        return n;
+    }
+
+    void move_to_tail(Node* n, size_t i) @safe @nogc
+    in
+    {
+        assert(i < N);
+        assert(_length>0);
+    }
+    out
+    {
+        assert(_heads[i] !is null && _tails[i] !is null);
+    }
+    do
+    {
+        if ( n == _tails[i] ) {
+            return;
+        }
+        // unlink
+        if ( n.links[i].prev is null )
+        {
+            _heads[i] = n.links[i].next;
+        }
+        else
+        {
+            n.links[i].prev.links[i].next = n.links[i].next;
+        }
+        if ( n.links[i].next is null )
+        {
+            _tails[i] = n.links[i].prev;
+        }
+        else
+        {
+            n.links[i].next.links[i].prev = n.links[i].prev;
+        }
+        // insert back
+        if ( _heads[i] is null ) {
+            _heads[i] = n;
+        }
+        n.links[i].prev = _tails[i];
+        if ( _tails[i] !is null )
+        {
+            _tails[i].links[i].next = n;
+        }
+        n.links[i].next = null;
+        _tails[i] = n;
+    }
+
+    void remove(Node* n) @safe @nogc
+    {
+        if ( n is null || _length == 0 )
+        {
+            return;
+        }
+        static foreach(i;0..N) {
+            if ( n.links[i].prev !is null ) {
+                n.links[i].prev.links[i].next = n.links[i].next;
+            }
+            if ( n.links[i].next !is null ) {
+                n.links[i].next.links[i].prev = n.links[i].prev;
+            }
+            if ( n == _tails[i] ) {
+                _tails[i] = n.links[i].prev;
+            }
+            if ( n == _heads[i] ) {
+                _heads[i] = n.links[i].next;
+            }
+        }
+        (() @trusted {dispose(allocator, n);})();
+        _length--;
+    }
+    Node* tail(size_t i) @safe @nogc
+    {
+        return _tails[i];
+    }
+    Node* head(size_t i) @safe @nogc
+    {
+        return _heads[i];
+    }
+}
+
+@safe unittest {
+    import std.algorithm;
+    import std.stdio;
+    import std.range;
+    struct Person
+    {
+        string name;
+        int    age;
+    }
+    MultiDList!(Person*, 2) mdlist;
+    Person[3] persons = [{"Alice", 11}, {"Bob", 9}, {"Carl", 10}];
+    foreach(i; 0..persons.length)
+    {
+        mdlist.insert_last(&persons[i]);
+    }
+    enum NameIndex = 0;
+    enum AgeIndex  = 1;
+    assert(mdlist.head(NameIndex).payload.name == "Alice");
+    assert(mdlist.head(AgeIndex).payload.age == 11);
+    assert(mdlist.tail(NameIndex).payload.name == "Carl");
+    assert(mdlist.tail(AgeIndex).payload.age == 10);
+    auto alice = mdlist.head(NameIndex);
+    auto bob = alice.next(NameIndex);
+    auto carl = bob.next(NameIndex);
+    mdlist.move_to_tail(alice, AgeIndex);
+    assert(mdlist.tail(AgeIndex).payload.age == 11);
+    mdlist.remove(alice);
+    assert(mdlist.head(NameIndex).payload.name == "Bob");
+    assert(mdlist.tail(NameIndex).payload.name == "Carl");
+    assert(mdlist.head(AgeIndex).payload.age == 9);
+    assert(mdlist.tail(AgeIndex).payload.age == 10);
+}
+
 struct DList(T, Allocator = Mallocator) {
     this(this) @disable;
     struct Node(T) {
         T payload;
         private Node!T* prev;
         private Node!T* next;
+        alias payload this;
     }
     private {
         alias allocator = Allocator.instance;
@@ -32,7 +203,8 @@ struct DList(T, Allocator = Mallocator) {
     ulong length() const pure nothrow @safe @nogc {
         return _length;
     }
-    Node!T* insert_last(T v) @safe @nogc nothrow
+
+    Node!T* insert_last(T v) @safe nothrow
     out
     {
         assert(_length>0);
@@ -54,7 +226,9 @@ struct DList(T, Allocator = Mallocator) {
         _length++;
         return n;
     }
-    Node!T* insert_first(T v) @safe @nogc nothrow
+
+    alias insertFront = insert_first;
+    Node!T* insert_first(T v) @safe nothrow
     out
     {
         assert(_length>0);

@@ -13,10 +13,10 @@ import optional;
 //
 
 // implements storage aspect of cache
-interface CachePolicy(K, V) {
+interface Cache(K, V) {
 
     // get value from cache
-    Optional!V get(K) @safe @nogc;
+    Nullable!V get(K) @safe @nogc;
 
     // put value to cache
     void put(K, V) @safe @nogc;

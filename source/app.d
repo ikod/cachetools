@@ -1,12 +1,12 @@
 import std.stdio;
 import cachetools;
-import cachetools.fifo;
+import cachetools.cache;
 import cachetools.containers.hashmap;
 import std.datetime.stopwatch;
 import std.random;
 import std.experimental.logger;
 
-CachePolicy!(int, int) p;
+//CachePolicy!(int, int) p;
 int hits;
 
 //immutable iterations = 10_000;
@@ -49,25 +49,25 @@ class LargeClass {
     }
 }
 
-void f() @safe {
-    auto c = makeCache!(int, int);
-    auto rnd = Random(unpredictableSeed);
-
-    c.policy = p;
-    foreach(i;0..iterations) {
-        int k = uniform(0, iterations, rnd);
-        //writeln(k);
-        c.put(k,i);
-    }
-
-    foreach(_; 0..iterations) {
-        int k = uniform(0, iterations, rnd);
-        auto v = c.get(k);
-        if ( !v.empty ) {
-            hits++;
-        }
-    }
-}
+//void f() @safe {
+//    auto c = makeCache!(int, int);
+//    auto rnd = Random(unpredictableSeed);
+//
+//    c.policy = p;
+//    foreach(i;0..iterations) {
+//        int k = uniform(0, iterations, rnd);
+//        //writeln(k);
+//        c.put(k,i);
+//    }
+//
+//    foreach(_; 0..iterations) {
+//        int k = uniform(0, iterations, rnd);
+//        auto v = c.get(k);
+//        if ( !v.empty ) {
+//            hits++;
+//        }
+//    }
+//}
 
 void f_AA() @safe {
     int[int] c;
@@ -124,7 +124,7 @@ void f_AA_largeClass() @safe {
 }
 
 void f_hashmap() @safe {
-    OAHashMap!(int, int) c;
+    HashMap!(int, int) c;
     auto rnd = Random(unpredictableSeed);
 
     foreach(i;0..iterations) {
@@ -142,7 +142,7 @@ void f_hashmap() @safe {
 }
 
 void f_oahashmap() @safe {
-    OAHashMap!(int, int) c;
+    HashMap!(int, int) c;
     auto rnd = Random(unpredictableSeed);
 
     foreach(i;0..iterations) {
@@ -161,7 +161,7 @@ void f_oahashmap() @safe {
 
 void f_oahashmapGC() @safe {
     import std.experimental.allocator.gc_allocator;
-    OAHashMap!(int, int, GCAllocator) c;
+    HashMap!(int, int, GCAllocator) c;
     auto rnd = Random(unpredictableSeed);
 
     foreach(i;0..iterations) {
@@ -179,7 +179,7 @@ void f_oahashmapGC() @safe {
 }
 
 void f_oahashmap_Large() @safe {
-    OAHashMap!(int, Large) c;
+    HashMap!(int, Large) c;
     auto rnd = Random(unpredictableSeed);
 
     foreach(i;0..iterations) {
@@ -198,7 +198,7 @@ void f_oahashmap_Large() @safe {
 
 void f_oahashmap_Large_GCAllocator() @safe {
     import std.experimental.allocator.gc_allocator;
-    OAHashMap!(int, Large, GCAllocator) c;
+    HashMap!(int, Large, GCAllocator) c;
     auto rnd = Random(unpredictableSeed);
 
     foreach(i;0..iterations) {
@@ -216,7 +216,7 @@ void f_oahashmap_Large_GCAllocator() @safe {
 }
 
 void f_oahashmap_LargeClass() @safe {
-    OAHashMap!(int, LargeClass) c;
+    HashMap!(int, LargeClass) c;
     auto rnd = Random(unpredictableSeed);
 
     foreach(i;0..iterations) {
@@ -235,7 +235,7 @@ void f_oahashmap_LargeClass() @safe {
 void f_oahashmap_LargeClassGC() @safe {
     import std.experimental.allocator.gc_allocator;
 
-    OAHashMap!(int, LargeClass,GCAllocator) c;
+    HashMap!(int, LargeClass,GCAllocator) c;
     auto rnd = Random(unpredictableSeed);
 
     foreach(i;0..iterations) {

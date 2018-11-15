@@ -5,8 +5,10 @@ import std.algorithm, std.range;
 import std.conv;
 import std.experimental.allocator.gc_allocator;
 import core.memory;
-import cachetools.containers.hashmap;
+
+// emsi_containers
 import containers.hashmap;
+import cachetools.containers.hashmap: CTHashMap = HashMap;
 
 immutable iterations = 1_000_000;
 immutable trials = 1;
@@ -47,7 +49,7 @@ void f_AA() @safe {
 void f_oahashmap() @safe {
     gcstart = () @trusted {return GC.stats;}();
 
-    OAHashMap!(int, int) c;
+    CTHashMap!(int, int) c;
 
     foreach(i;0..iterations) {
         int k = randw[i];
@@ -66,7 +68,7 @@ void f_oahashmap() @safe {
 void f_oahashmapGC() @safe {
     gcstart = () @trusted {return GC.stats;}();
 
-    OAHashMap!(int, int, GCAllocator) c;
+    CTHashMap!(int, int, GCAllocator) c;
 
     foreach(i;0..iterations) {
         int k = randw[i];
@@ -126,7 +128,7 @@ void f_AA_remove() @safe {
 void f_oahashmapGC_remove() @safe {
     gcstart = () @trusted {return GC.stats;}();
 
-    OAHashMap!(int, int, GCAllocator) c;
+    CTHashMap!(int, int, GCAllocator) c;
 
     foreach(i;0..iterations) {
         int k = randw[i];
@@ -146,7 +148,7 @@ void f_oahashmapGC_remove() @safe {
 void f_oahashmap_remove() @safe {
     gcstart = () @trusted {return GC.stats;}();
 
-    OAHashMap!(int, int) c;
+    CTHashMap!(int, int) c;
 
     foreach(i;0..iterations) {
         int k = randw[i];
@@ -207,7 +209,7 @@ void shakespeare_OAHashMap()
 {
     gcstart = () @trusted {return GC.stats;} ();
 
-    OAHashMap!(string, int) count;
+    CTHashMap!(string, int) count;
     void updateCount(char[] word) {
         auto ptr = cast(string)word in count;
         if (!ptr)
@@ -226,7 +228,7 @@ void shakespeare_OAHashMapGC()
 {
     gcstart = () @trusted {return GC.stats;} ();
 
-    OAHashMap!(string, int, GCAllocator) count;
+    CTHashMap!(string, int, GCAllocator) count;
     void updateCount(char[] word) {
         auto ptr = cast(string)word in count;
         if (!ptr)
@@ -301,7 +303,7 @@ void LARGE_AA() @safe {
 void OALARGE() @safe {
     gcstart = () @trusted {return GC.stats;}();
 
-    OAHashMap!(int, LARGE) c;
+    CTHashMap!(int, LARGE) c;
 
     foreach(i;0..iterations) {
         int k = randw[i];
@@ -320,7 +322,7 @@ void OALARGE() @safe {
 void OALARGE_GC() @safe {
     gcstart = () @trusted {return GC.stats;}();
 
-    OAHashMap!(int, LARGE, GCAllocator) c;
+    CTHashMap!(int, LARGE, GCAllocator) c;
 
     foreach(i;0..iterations) {
         int k = randw[i];
@@ -356,24 +358,124 @@ void HMLARGE() {
     gcstop = () @trusted {return GC.stats;}();
 }
 
+void test_dlist_std()
+{
+    import std.container.dlist;
+    gcstart = () @trusted {return GC.stats;}();
+    auto intList = new DList!int;
+    foreach(i; randw)
+    {
+        intList.insertBack(i);
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+
+void test_dlist_cachetools() @safe
+{
+    import cachetools.containers.lists;
+    gcstart = () @trusted {return GC.stats;}();
+    DList!int intList;
+    foreach(i; randw)
+    {
+        intList.insert_last(i);
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+
+void test_dlist_cachetools_GC() @safe
+{
+    import cachetools.containers.lists;
+    gcstart = () @trusted {return GC.stats;}();
+    DList!(int, GCAllocator) intList;
+    foreach(i; randw)
+    {
+        intList.insert_last(i);
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+
+void test_dlist_emsi()
+{
+    import containers.unrolledlist;
+    gcstart = () @trusted {return GC.stats;}();
+    UnrolledList!int intList;
+    foreach(i; randw)
+    {
+        intList.insertBack(i);
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+// --
+void test_dlist_std_LARGE()
+{
+    import std.container.dlist;
+    gcstart = () @trusted {return GC.stats;}();
+    auto list = new DList!LARGE;
+    foreach(i; randw)
+    {
+        list.insertBack(LARGE(i));
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+
+void test_dlist_cachetools_LARGE() @safe
+{
+    import cachetools.containers.lists;
+    gcstart = () @trusted {return GC.stats;}();
+    DList!LARGE list;
+    foreach(i; randw)
+    {
+        list.insert_last(LARGE(i));
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+
+void test_dlist_cachetools_LARGE_GC() @safe
+{
+    import cachetools.containers.lists;
+    gcstart = () @trusted {return GC.stats;}();
+    DList!(LARGE, GCAllocator) list;
+    foreach(i; randw)
+    {
+        list.insert_last(LARGE(i));
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+
+void test_dlist_emsi_LARGE()
+{
+    import containers.unrolledlist;
+    gcstart = () @trusted {return GC.stats;}();
+    UnrolledList!LARGE list;
+    foreach(i; randw)
+    {
+        list.insertBack(LARGE(i));
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
 
 void main()
 {
+    import std.string;
     string test;
     Duration[1] r;
-    string fmt = "%-26.26s %-31.31s GC memory Δ %dMB";
+    string fmt = "%-7.7s %-31.31s GC memory Δ %dMB";
+
+    writeln("\n", center(" Test inserts and lookups int[int] ", 50, ' '));
+    writeln(      center(" ================================= ", 50, ' '));
+
     GC.collect();GC.minimize();
-    test = "int[int]";
+    test = "std";
     r = benchmark!(f_AA)(trials);
     writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
-    test = "OAHashMap!(int,int)";
+    test = "c.t.";
     r = benchmark!(f_oahashmap)(trials);
     writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
-    test = "OAHashMap!(int, int)+GC";
+    test = "c.t.+GC";
     r = benchmark!(f_oahashmapGC)(trials);
     writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
@@ -381,24 +483,26 @@ void main()
     {
         // emsi-containers do not work for me under windows
         GC.collect();GC.minimize();
-        test = "HashMap!(int, int)";
+        test = "emsi";
         r = benchmark!(f_hashmap)(trials);
         writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
     }
-    writeln("---");
+
+    writeln("\n", center(" Test insert, remove, lookup for int[int]", 50, ' '));
+    writeln(      center(" ======================================= ", 50, ' '));
 
     GC.collect();GC.minimize();
-    test = "int[int] rem";
+    test = "std";
     r = benchmark!(f_AA_remove)(trials);
     writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
-    test = "OAHashMap!(int,int) rem";
+    test = "c.t.";
     r = benchmark!(f_oahashmap_remove)(trials);
     writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
-    test = "OAHashMap!(int,int)+GC rem";
+    test = "c.t.+GC";
     r = benchmark!(f_oahashmapGC_remove)(trials);
     writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
@@ -406,25 +510,26 @@ void main()
     {
         // emsi-containers do not work for me under windows
         GC.collect();GC.minimize();
-        test = "HashMap!(int,int) rem";
+        test = "emsi";
         r = benchmark!(f_hashmap_remove)(trials);
         writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
     }
 
-    writeln("---");
+    writeln("\n", center(" Test inserts and lookups for struct[int] ", 50, ' '));
+    writeln(      center(" ======================================= ", 50, ' '));
 
     GC.collect();GC.minimize();
-    test = "LARGE[int]";
+    test = "std";
     r = benchmark!(LARGE_AA)(trials);
     writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
-    test = "OAHashMap!(int, LARGE)";
+    test = "c.t.";
     r = benchmark!(OALARGE)(trials);
     writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
-    test = "OAHashMap!(int, LARGE)+GC";
+    test = "c.t.+GC";
     r = benchmark!(OALARGE_GC)(trials);
     writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
@@ -432,24 +537,26 @@ void main()
     {
         // emsi-containers do not work for me under windows
         GC.collect();GC.minimize();
-        test = "HashMap!(int, LARGE)";
+        test = "emsi";
         r = benchmark!(HMLARGE)(trials);
         writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
     }
-    writeln("---");
+
+    writeln("\n", center(" Test word counting int[string]", 50, ' '));
+    writeln(      center(" ============================= ", 50, ' '));
 
     GC.collect();GC.minimize();
-    test = "Shakespeare int[string]";
+    test = "std";
     r = benchmark!shakespeare_std(1);
     writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
-    test = "Shakespeare OAHashMap";
+    test = "c.t.";
     r = benchmark!shakespeare_OAHashMap(1);
     writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
-    test = "Shakespeare OAHashMap+GC";
+    test = "c.t.+GC";
     r = benchmark!shakespeare_OAHashMapGC(1);
     writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
@@ -457,8 +564,55 @@ void main()
     {
         // emsi-containers do not work for me under windows
         GC.collect();GC.minimize();
-        test = "Shakespeare HashMap";
+        test = "emsi  ";
         r = benchmark!shakespeare_HashMap(1);
         writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
     }
+
+    writeln("\n", center(" Test double-linked list DList!int ", 50, ' '));
+    writeln(      center(" ================================= ", 50, ' '));
+
+    GC.collect();GC.minimize();
+    test = "std";
+    r = benchmark!(test_dlist_std)(trials);
+    writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "c.t.";
+    r = benchmark!(test_dlist_cachetools)(trials);
+    writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "c.t.+GC";
+    r = benchmark!(test_dlist_cachetools_GC)(trials);
+    writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "emsi";
+    r = benchmark!(test_dlist_cachetools)(trials);
+    writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    writeln("\n", center(" Test double-linked list of structs ", 50, ' '));
+    writeln(      center(" ================================== ", 50, ' '));
+
+    GC.collect();GC.minimize();
+    test = "std";
+    r = benchmark!(test_dlist_std_LARGE)(trials);
+    writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "c.t.";
+    r = benchmark!(test_dlist_cachetools_LARGE)(trials);
+    writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "c.t.+GC";
+    r = benchmark!(test_dlist_cachetools_LARGE_GC)(trials);
+    writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "emsi";
+    r = benchmark!(test_dlist_emsi_LARGE)(trials);
+    writefln(fmt, test, to!string(r), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
 }

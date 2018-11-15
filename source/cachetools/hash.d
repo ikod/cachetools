@@ -1,9 +1,6 @@
 module cachetools.hash;
 
 import std.traits;
-import std.stdio;
-import std.format;
-import std.typecons;
 
 ///
 /// For classes (and structs with toHash method) we use v.toHash() to compute hash.
@@ -65,19 +62,27 @@ if ( !UseToHashMethod!T )
     assert(hash_function("abc") == cast(hash_t)0xe71fa2190541574b);
 
     struct A0 {}
-    assert(!UseToHashMethod!A0());
+    assert(!UseToHashMethod!A0);
 
     struct A1 {
         hash_t toHash() const @safe {
             return 0;
         }
     }
-    assert(UseToHashMethod!A1());
+    assert(UseToHashMethod!A1);
 
+    // class with toHash override - will use toHash
     class C0 {
         override hash_t toHash() const @safe {
             return 0;
         }
     }
-    assert(UseToHashMethod!A1());
+    assert(UseToHashMethod!C0);
+    C0 c0 = new C0();
+    assert(c0.toHash() == 0);
+
+    // class without toHash override - use Object.toHash method
+    class C1 {
+    }
+    assert(UseToHashMethod!C1);
 }
