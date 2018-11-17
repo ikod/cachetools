@@ -41,15 +41,15 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         alias allocator         = Allocator.instance;
         alias ListElementPtr    = __elements.Node*;
 
-        MultiDList!(ListElement, 2)     __elements;
-        HashMap!(K, MapElement)         __map;
+        MultiDList!(ListElement, 2, Allocator)     __elements;
+        HashMap!(K, MapElement, Allocator)         __map;
 
         // configuration
         size_t                          __size = 1024;
         uint                            __ttl;
     }
 
-    Nullable!V get(K k) @safe @nogc
+    Nullable!V get(K k) @safe
     {
         debug(cachetools) tracef("get %s", k);
         auto store_p = k in __map;
@@ -71,7 +71,7 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         return Nullable!V(store_p.value);
     }
 
-    void put(K k, V v) @safe @nogc
+    void put(K k, V v) @safe
     {
         time_t ts = time(null);
         auto store_p = k in __map;
@@ -133,7 +133,8 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
 
     void clear()
     {
-        
+        __map.clear();
+        __elements.clear();
     }
 
     ulong length() const @safe @nogc
@@ -193,6 +194,9 @@ unittest
     lru.put(7, "7");
     assert(lru.length == 4);
     assert(lru.get(7) == "7");
+    lru.clear();
+    assert(lru.length == 0);
+    assert(lru.get(7).isNull);
 }
 
 class RemovedEntriesList(K, V): RemovedEntryListener!(K, V) {

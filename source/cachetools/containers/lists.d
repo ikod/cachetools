@@ -109,7 +109,7 @@ struct MultiDList(T, int N, Allocator = Mallocator)
         _tails[i] = n;
     }
 
-    void remove(Node* n) @safe @nogc
+    void remove(Node* n) nothrow @safe @nogc
     {
         if ( n is null || _length == 0 )
         {
@@ -132,13 +132,21 @@ struct MultiDList(T, int N, Allocator = Mallocator)
         (() @trusted {dispose(allocator, n);})();
         _length--;
     }
-    Node* tail(size_t i) @safe @nogc
+    Node* tail(size_t i) pure nothrow @safe @nogc
     {
         return _tails[i];
     }
-    Node* head(size_t i) @safe @nogc
+    Node* head(size_t i) pure nothrow @safe @nogc
     {
         return _heads[i];
+    }
+    void clear() nothrow @safe @nogc
+    {
+        while(_length>0)
+        {
+            auto n = _heads[0];
+            remove(n);
+        }
     }
 }
 

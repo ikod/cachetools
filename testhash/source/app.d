@@ -8,7 +8,9 @@ import core.memory;
 
 // emsi_containers
 import containers.hashmap;
+
 import cachetools.containers.hashmap: CTHashMap = HashMap;
+import cachetools.cache: CacheLRUCT = CacheLRU;
 
 immutable iterations = 1_000_000;
 immutable trials = 1;
@@ -454,6 +456,60 @@ void test_dlist_emsi_LARGE()
     gcstop = () @trusted {return GC.stats;}();
 }
 
+void test_ct_cache()
+{
+    gcstart = () @trusted {return GC.stats;}();
+
+    auto c = new CacheLRUCT!(int, int);
+    c.size = iterations;
+
+    // fill cache with randw
+    foreach(i;0..iterations) {
+        int k = randw[i];
+        c.put(k, i);
+    }
+
+    // update all cached values
+    foreach(i; 0..iterations) {
+        int k = randw[i];
+        auto v = c.get(k);
+        c.put(k, ++v);
+    }
+    // purge values by adding randr
+    foreach(i; 0..iterations) {
+        int k = randr[i];
+        c.put(k + iterations, i);
+    }
+    gcstop = () @trusted {return GC.stats;} ();
+}
+
+void test_ct_cache_gc()
+{
+    gcstart = () @trusted {return GC.stats;}();
+
+    auto c = new CacheLRUCT!(int, int, GCAllocator);
+    c.size = iterations;
+
+    // fill cache with randw
+    foreach(i;0..iterations) {
+        int k = randw[i];
+        c.put(k, i);
+    }
+
+    // update all cached values
+    foreach(i; 0..iterations) {
+        int k = randw[i];
+        auto v = c.get(k);
+        c.put(k, ++v);
+    }
+    // purge values by adding randr
+    foreach(i; 0..iterations) {
+        int k = randr[i];
+        c.put(k + iterations, i);
+    }
+    gcstop = () @trusted {return GC.stats;} ();
+}
+
 void main()
 {
     import std.string;
@@ -615,4 +671,14 @@ void main()
     r = benchmark!(test_dlist_emsi_LARGE)(trials);
     writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
+    writeln("\n", center(" Test cache ", 50, ' '));
+    writeln(      center(" ========== ", 50, ' '));
+
+    test = "c.t";
+    r = benchmark!(test_ct_cache)(trials);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    test = "c.t+GC";
+    r = benchmark!(test_ct_cache_gc)(trials);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 }

@@ -16,16 +16,16 @@ import optional;
 interface Cache(K, V) {
 
     // get value from cache
-    Nullable!V get(K) @safe @nogc;
+    Nullable!V get(K) @safe;
 
     // put value to cache
-    void put(K, V) @safe @nogc;
+    void put(K, V) @safe;
 
     // remove key
-    bool  remove(K) @safe @nogc;
+    bool  remove(K) @safe;
     
     // clear entire cache
-    void  clear() @safe @nogc;
+    void  clear() @safe;
     
     // # of elements
     ulong length() const @safe @nogc;

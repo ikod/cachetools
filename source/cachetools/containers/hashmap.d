@@ -108,7 +108,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
             enum    HASH_MASK =      0x0F_FF_FF_FF;
         }
 
-        struct  _Bucket {
+        struct _Bucket {
             hash_t  hash;
             K       key;
             static if (InlineValueOrClass)
@@ -168,7 +168,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
     /// Find any unallocated bucket starting from start_index (inclusive)
     /// Returns index on success or hash_t.max on fail
     ///
-    package hash_t findEmptyIndex(const hash_t start_index) pure const @safe @nogc
+    private hash_t findEmptyIndex(const hash_t start_index) pure const @safe @nogc
     in
     {
         assert(start_index < _buckets_num);
@@ -192,7 +192,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
     ///
     /// Inherits @nogc and from K opEquals()
     ///
-    package hash_t findEntryIndex(const hash_t start_index, const hash_t hash, in K key) pure const @safe
+    private hash_t findEntryIndex(const hash_t start_index, const hash_t hash, in K key) pure const @safe
     in
     {
         assert(hash < DELETED_HASH);
@@ -220,13 +220,13 @@ struct HashMap(K, V, Allocator = Mallocator) {
     }
 
     ///
-    /// Find place where we can insert(first DELETED or EMPTY bucket) or update existent (ALLOCATED)
+    /// Find place where we can insert(DELETED or EMPTY bucket) or update existent (ALLOCATED)
     /// bucket for key k and precomputed hash starting from start_index
     ///
     ///
     /// Inherits @nogc from K opEquals()
     ///
-    package hash_t findUpdateIndex(const hash_t start_index, const hash_t computed_hash, in K key) pure const @safe
+    private hash_t findUpdateIndex(const hash_t start_index, const hash_t computed_hash, in K key) pure const @safe
     in 
     {
         assert(computed_hash < DELETED_HASH);
@@ -258,7 +258,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
     /// Find unallocated entry in the buckets slice
     /// We use this function during resize() only.
     ///
-    package long findEmptyIndexExtended(const hash_t start_index, in ref _Bucket[] buckets, int new_mask) pure const @safe @nogc
+    private long findEmptyIndexExtended(const hash_t start_index, in ref _Bucket[] buckets, int new_mask) pure const @safe @nogc
     in
     {
         assert(start_index < buckets.length);
@@ -283,34 +283,14 @@ struct HashMap(K, V, Allocator = Mallocator) {
         return hash_t.max;
     }
 
-    V* opBinaryRight(string op)(in K k) @safe if (op == "in") {
-
-        if ( _buckets_num == 0 ) return null;
-
-        immutable computed_hash = hash_function(k) & HASH_MASK;
-        immutable start_index = computed_hash & _mask;
-        immutable lookup_index = findEntryIndex(start_index, computed_hash, k);
-        if ( lookup_index == hash_t.max) {
-            return null;
-        }
-        static if ( InlineValueOrClass )
-        {
-            return &_buckets[lookup_index].value;
-        }
-        else
-        {
-            return _buckets[lookup_index].value_ptr;
-        }
-    }
-
-    bool tooMuchDeleted() pure const @safe @nogc {
+    private bool tooMuchDeleted() pure const @safe @nogc {
         //
         // _deleted > _buckets_num / 8
         //
         return _deleted << 3 > _buckets_num;
     }
 
-    bool tooHighLoad() pure const @safe @nogc {
+    private bool tooHighLoad() pure const @safe @nogc {
         //
         // _allocated/_buckets_num > 0.8
         // 5 * allocated > 4 * buckets_num
@@ -318,7 +298,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         return _allocated + (_allocated << 2) > _buckets_num << 2;
     }
 
-    void doResize(int dest) @safe {
+    private void doResize(int dest) @safe {
         immutable _new_buckets_num = dest;
         immutable _new_mask = dest - 1;
         _Bucket[] _new_buckets = makeArray!(_Bucket)(allocator, _new_buckets_num);
@@ -354,14 +334,66 @@ struct HashMap(K, V, Allocator = Mallocator) {
         () @nogc {debug(cachetools) tracef("resizing done: new loadfactor: %s", (1.0*_allocated) / _buckets_num);}();
     }
 
-    //alias put = putOld;
+    V* opBinaryRight(string op)(in K k) @safe if (op == "in")
+    {
+
+        if ( _buckets_num == 0 ) return null;
+
+        immutable computed_hash = hash_function(k) & HASH_MASK;
+        immutable start_index = computed_hash & _mask;
+        immutable lookup_index = findEntryIndex(start_index, computed_hash, k);
+        if ( lookup_index == hash_t.max) {
+            return null;
+        }
+        static if ( InlineValueOrClass )
+        {
+            return &_buckets[lookup_index].value;
+        }
+        else
+        {
+            return _buckets[lookup_index].value_ptr;
+        }
+    }
+
+    //
+    // Have to use two overloads for get and getOrAdd instead of single lazy paramenter, 
+    // because 'lazy' force non-@nogc attribute for function.
+    // see:
+    // https://forum.dlang.org/thread/qgysckdwzgfptpnorpbw@forum.dlang.org
+    // https://issues.dlang.org/show_bug.cgi?id=12664
+    //
+    V* getOrAdd(T)(K k, T defaultValue) @safe if (!isCallable!T)
+    {
+       V* v = k in this;
+       if ( v )
+       {
+           return v;
+       }
+       v = put(k, defaultValue);
+       return v;
+    }
+    V* getOrAdd(T)(K k, T defaultValue) @safe if (isCallable!T)
+    {
+       V* v = k in this;
+       if ( v )
+       {
+           return v;
+       }
+       v = put(k, defaultValue());
+       return v;
+    }
 
     ///
     /// put pair (k,v) into hash.
     /// it must be @safe, it inherits @nogc properties from K and V
     /// It can resize hashtable it is overloaded or has too much deleted entries
     ///
-    bool put(K k, V v) @safe {
+    V* put(K k, V v) @safe
+    out
+    {
+        assert(__result !is null);
+    }
+    do {
         if ( !_buckets_num ) {
             _buckets_num = _empty = initial_buckets_num;
             assert(_popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
@@ -376,7 +408,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
             doResize(grow_factor * _buckets_num);
         }
 
-
+        V* r; //result
         immutable computed_hash = hash_function(k) & HASH_MASK;
         immutable start_index = computed_hash & _mask;
         immutable placement_index = findUpdateIndex(start_index, computed_hash, k);
@@ -394,6 +426,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         {
             () @nogc @trusted {debug(cachetools) tracef("place inline buckets[%d] '%s'='%s'", placement_index, k, v);}();
             _buckets[placement_index].value = v;
+            r = &_buckets[placement_index].value;
         }
         else
         {
@@ -401,23 +434,22 @@ struct HashMap(K, V, Allocator = Mallocator) {
             if ( (_buckets[placement_index].hash & TYPE_MASK) == ALLOCATED_HASH )
             {
                 // we just replace what we already allocated
-                *(_buckets[placement_index].value_ptr) = v;
+                r = (_buckets[placement_index].value_ptr);
+                *r = v;
             }
             else
             {
-                auto p = make!(V)(allocator);
-                *p = v;
-                _buckets[placement_index].value_ptr = p;
+                r = _buckets[placement_index].value_ptr = make!(V)(allocator);
+                *r = v;
             }
         }
         _buckets[placement_index].hash = computed_hash | ALLOCATED_HASH;
         _buckets[placement_index].key = k;
-        return true;
+        return r;
     }
 
     bool remove(K k) @safe {
-        import std.stdio;
-        ////writefln("remove %s, deleted: %s", k, _deleted);
+
         if ( tooMuchDeleted ) {
             // do not shrink, just compact table
             doResize(_buckets_num);
@@ -429,7 +461,8 @@ struct HashMap(K, V, Allocator = Mallocator) {
         immutable computed_hash = hash_function(k) & HASH_MASK;
         immutable start_index = computed_hash & _mask;
         immutable lookup_index = findEntryIndex(start_index, computed_hash, k);
-        if ( lookup_index == hash_t.max ) {
+        if ( lookup_index == hash_t.max )
+        {
             // nothing to remove
             return false;
         }
@@ -476,6 +509,14 @@ struct HashMap(K, V, Allocator = Mallocator) {
     }
     void clear() @safe 
     {
+        static if ( !inlineValues )
+        {
+           // dispose every element
+           foreach(k; byKey)
+           {
+               remove(k);
+           }
+        }
         (() @trusted {
             GC.removeRange(_buckets.ptr);
             dispose(allocator, _buckets);
@@ -530,7 +571,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         return _kvRange(_buckets);
     }
 
-    auto byValue() pure
+    auto byValue() pure @safe
     {
         struct _kvRange {
             int         _pos;
@@ -573,7 +614,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         return _kvRange(_buckets);
     }
 
-    auto byPair() pure
+    auto byPair() pure @safe
     {
         import std.typecons;
 
@@ -721,7 +762,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         assert(!int2string.remove(33));
         
         HashMap!(int, LargeStruct) int2LagreStruct;
-        u = int2LagreStruct.put(1, LargeStruct(1,2));
+        int2LagreStruct.put(1, LargeStruct(1,2));
         {
             auto v = 1 in int2LagreStruct;
             assert(v !is null);
@@ -920,4 +961,51 @@ unittest {
     assert(hashMap.length == 0);
     hashMap.put(1,1);
     assert(1 in hashMap && hashMap.length == 1);
+}
+
+@safe @nogc unittest
+{
+    // test of nogc getOrAdd
+
+    HashMap!(int, int) hashMap;
+
+    foreach(i;0..100) {
+        hashMap.put(i, i);
+    }
+    auto v = hashMap.getOrAdd(-1, -1);
+    assert(-1 in hashMap && *v == -1);
+}
+
+@safe @nogc unittest
+{
+    // test of nogc getOrAdd with lazy default value
+
+    HashMap!(int, int) hashMap;
+
+    foreach(i;0..100) {
+        hashMap.put(i, i);
+    }
+    int* v = hashMap.getOrAdd(-1, () => -1);
+    assert(-1 in hashMap && *v == -1);
+}
+
+@safe unittest
+{
+    // test of non-@nogc getOrAdd with lazy default value
+    import std.conv;
+    class C {
+        string v;
+        this(int _v) @safe
+        {
+            v = to!string(_v);
+        }
+    }
+
+    HashMap!(int, C) hashMap;
+
+    foreach(i;0..100) {
+        hashMap.put(i, new C(i));
+    }
+    C* v = hashMap.getOrAdd(-1, () => new C(-1));
+    assert(-1 in hashMap && v.v == "-1");
 }
