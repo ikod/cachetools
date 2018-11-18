@@ -16,6 +16,14 @@ private import std.experimental.allocator.mallocator: Mallocator;
 private import cachetools.hash;
 private import cachetools.containers.lists;
 
+
+class KeyNotFound: Exception
+{
+    this(string msg = "key not found") @safe
+    {
+        super(msg);
+    }
+}
 ///
 /// Return true if it is worth to store values inline in hash table
 /// V footprint should be small enough
@@ -119,7 +127,19 @@ struct HashMap(K, V, Allocator = Mallocator) {
             {
                 V*  value_ptr;
             }
-
+            this(_Bucket o)
+            {
+                hash = o.hash;
+                key = o.key;
+                static if (InlineValueOrClass)
+                {
+                    value = o.value;
+                }
+                else
+                {
+                    value_ptr = o.value_ptr;
+                }
+            }
             string toString() const {
                 import std.format;
                 static if (InlineValueOrClass) {
@@ -211,7 +231,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
             }
 
             if ( h >= ALLOCATED_HASH && (h & HASH_MASK) == hash && keyEquals(_buckets[index].key, key) ) {
-                () @nogc @trusted {debug(cachetools) tracef("test entry index %d for key %s - success", index, key);}();
+                //() @nogc @trusted {debug(cachetools) tracef("test entry index %d for key %s - success", index, key);}();
                 return index;
             }
             index = (index + 1) & _mask;
@@ -334,6 +354,9 @@ struct HashMap(K, V, Allocator = Mallocator) {
         () @nogc {debug(cachetools) tracef("resizing done: new loadfactor: %s", (1.0*_allocated) / _buckets_num);}();
     }
 
+    ///
+    /// Lookup methods
+    ///
     V* opBinaryRight(string op)(in K k) @safe if (op == "in")
     {
 
@@ -355,34 +378,73 @@ struct HashMap(K, V, Allocator = Mallocator) {
         }
     }
 
-    //
-    // Have to use two overloads for get and getOrAdd instead of single lazy paramenter, 
-    // because 'lazy' force non-@nogc attribute for function.
-    // see:
-    // https://forum.dlang.org/thread/qgysckdwzgfptpnorpbw@forum.dlang.org
-    // https://issues.dlang.org/show_bug.cgi?id=12664
-    //
-    V* getOrAdd(T)(K k, T defaultValue) @safe if (!isCallable!T)
+    ref V getOrAdd(T)(K k, T defaultValue) @safe
     {
-       V* v = k in this;
-       if ( v )
-       {
-           return v;
-       }
-       v = put(k, defaultValue);
-       return v;
-    }
-    V* getOrAdd(T)(K k, T defaultValue) @safe if (isCallable!T)
-    {
-       V* v = k in this;
-       if ( v )
-       {
-           return v;
-       }
-       v = put(k, defaultValue());
-       return v;
+        V* v = k in this;
+        if ( v )
+        {
+            return *v;
+        }
+        static if (isAssignable!(V, T))
+        {
+            return *put(k, defaultValue);
+        }
+        else static if ( isCallable!T && isAssignable!(V, ReturnType!T))
+        {
+            return *put(k, defaultValue());
+        }
+        else
+        {
+            static assert(0, "what?");
+        }
     }
 
+    alias require = getOrAdd;
+
+    /// Attention: this can't return ref as default value can be rvalue
+    V get(T)(K k, T defaultValue) @safe
+    {
+        V* v = k in this;
+        if ( v )
+        {
+            return *v;
+        }
+        static if (isAssignable!(V, T))
+        {
+            return defaultValue;
+        }
+        else static if ( isCallable!T && isAssignable!(V, ReturnType!T))
+        {
+            return defaultValue();
+        }
+        else
+        {
+            static assert(0, "You must call 'get' with default value of HashMap 'value' type, or with callable, returning HashMap 'value'");
+        }
+    }
+
+    ///
+    /// Attention: you can't use this method in @nogc code.
+    /// Usual aa[key] method.
+    /// Throws exception if key not found
+    ///
+    ref V opIndex(in K k) @safe
+    {
+        V* v = k in this;
+        if ( v !is null )
+        {
+            return *v;
+        }
+        throw new KeyNotFound();
+    }
+
+    ///
+    /// Modifiers
+    ///
+    void opIndexAssign(V v, K k) @safe
+    {
+        put(k, v);
+    }
     ///
     /// put pair (k,v) into hash.
     /// it must be @safe, it inherits @nogc properties from K and V
@@ -413,7 +475,8 @@ struct HashMap(K, V, Allocator = Mallocator) {
         immutable start_index = computed_hash & _mask;
         immutable placement_index = findUpdateIndex(start_index, computed_hash, k);
         assert(placement_index >= 0);
-        immutable h = _buckets[placement_index].hash;
+        _Bucket* bucket = &_buckets[placement_index];
+        immutable h = bucket.hash;
 
         () @nogc @trusted {debug(cachetools) tracef("start_index: %d, placement_index: %d", start_index, placement_index);}();
 
@@ -425,26 +488,26 @@ struct HashMap(K, V, Allocator = Mallocator) {
         static if ( InlineValueOrClass )
         {
             () @nogc @trusted {debug(cachetools) tracef("place inline buckets[%d] '%s'='%s'", placement_index, k, v);}();
-            _buckets[placement_index].value = v;
-            r = &_buckets[placement_index].value;
+            bucket.value = v;
+            r = &bucket.value;
         }
         else
         {
             () @nogc @trusted {debug(cachetools) tracef("place with allocation buckets[%d] '%s'='%s'", placement_index, k, v);}();
-            if ( (_buckets[placement_index].hash & TYPE_MASK) == ALLOCATED_HASH )
+            if ( (bucket.hash & TYPE_MASK) == ALLOCATED_HASH )
             {
                 // we just replace what we already allocated
-                r = (_buckets[placement_index].value_ptr);
+                r = (bucket.value_ptr);
                 *r = v;
             }
             else
             {
-                r = _buckets[placement_index].value_ptr = make!(V)(allocator);
+                r = b.value_ptr = make!(V)(allocator);
                 *r = v;
             }
         }
-        _buckets[placement_index].hash = computed_hash | ALLOCATED_HASH;
-        _buckets[placement_index].key = k;
+        bucket.hash = computed_hash | ALLOCATED_HASH;
+        bucket.key = k;
         return r;
     }
 
@@ -660,6 +723,8 @@ struct HashMap(K, V, Allocator = Mallocator) {
     }
 }
 
+/// Tests
+
 @safe unittest {
     // test class as key
     globalLogLevel = LogLevel.info;
@@ -803,6 +868,8 @@ struct HashMap(K, V, Allocator = Mallocator) {
     int *v = k0 in h;
     assert(v);
     assert(*v == 1);
+    h[k0] = v0;
+    assert(h[k0] == v0);
 }
 
 @safe unittest
@@ -824,14 +891,18 @@ struct HashMap(K, V, Allocator = Mallocator) {
     }
     alias K = c;
     alias V = int;
-    HashMap!(K,V) h;
     K k0 = new c(0);
     V v0 = 1;
-    h.put(k0, v0);
-    int *v = k0 in h;
-    assert(v);
-    assert(*v == 1);
-
+    () @nogc {
+        HashMap!(K,V) h;
+        h.put(k0, v0);
+        int *v = k0 in h;
+        assert(v);
+        assert(*v == 1);
+        h[k0] = 2;
+        v = k0 in h;
+        assert(*v == 2);
+    }();
 }
 
 /// Test if we can work with non-@nogc opEquals for class-key.
@@ -875,9 +946,9 @@ struct HashMap(K, V, Allocator = Mallocator) {
     import std.stdio;
 
     HashMap!(int, string) m;
-    m.put(1,  "one");
-    m.put(2,  "two");
-    m.put(10, "ten");
+    m[1] = "one";
+    m[2] = "two";
+    m[10] = "ten";
     assert(equal(m.byKey.array.sort, [1,2,10]));
     assert(equal(m.byValue.array.sort, ["one", "ten", "two"]));
     assert(equal(
@@ -939,7 +1010,7 @@ unittest {
 
     foreach(i;0..iterations) {
         int k = uniform(0, iterations, rnd);
-        hashMap.put(k, i);
+        hashMap[k] = i;
     }
     foreach(k; hashMap.byKey)
     {
@@ -955,11 +1026,11 @@ unittest {
     HashMap!(int, int) hashMap;
 
     foreach(i;0..100) {
-        hashMap.put(i, i);
+        hashMap[i] = i;
     }
     hashMap.clear();
     assert(hashMap.length == 0);
-    hashMap.put(1,1);
+    hashMap[1] = 1;
     assert(1 in hashMap && hashMap.length == 1);
 }
 
@@ -970,10 +1041,10 @@ unittest {
     HashMap!(int, int) hashMap;
 
     foreach(i;0..100) {
-        hashMap.put(i, i);
+        hashMap[i] = i;
     }
     auto v = hashMap.getOrAdd(-1, -1);
-    assert(-1 in hashMap && *v == -1);
+    assert(-1 in hashMap && v == -1);
 }
 
 @safe @nogc unittest
@@ -983,16 +1054,49 @@ unittest {
     HashMap!(int, int) hashMap;
 
     foreach(i;0..100) {
-        hashMap.put(i, i);
+        hashMap[i] = i;
     }
-    int* v = hashMap.getOrAdd(-1, () => -1);
-    assert(-1 in hashMap && *v == -1);
+    int v = hashMap.getOrAdd(-1, () => -1);
+    assert(-1 in hashMap && v == -1);
+    assert(hashMap.get(-1, 0) == -1); // key -1 is in hash, return value
+    assert(hashMap.get(-2, 0) == 0);  // key -2 not in map, return default value
+    assert(hashMap.get(-3, () => 0) == 0);  // ditto
+}
+
+@safe unittest
+{
+    import std.socket;
+    HashMap!(string, Socket) socketPool;
+    Socket s0 = socketPool.getOrAdd("http://example.com", () => new Socket(AddressFamily.INET, SocketType.STREAM));
+    assert(s0 !is null);
+    assert(s0.addressFamily == AddressFamily.INET);
+    Socket s1 = socketPool.getOrAdd("http://example.com", () => new Socket(AddressFamily.INET, SocketType.STREAM));
+    assert(s1 !is null);
+    assert(s1 is s0);
+}
+
+@safe unittest
+{
+    import std.socket;
+    class Connection {
+        Socket s;
+        bool opEquals(const Connection other) const pure @safe
+        {
+            return s is other.s;
+        }
+        override hash_t toHash() const @safe
+        {
+            return hash_function(s.handle);
+        }
+    }
+    HashMap!(Connection, string) socketPool;
 }
 
 @safe unittest
 {
     // test of non-@nogc getOrAdd with lazy default value
     import std.conv;
+    import std.exception;
     class C {
         string v;
         this(int _v) @safe
@@ -1004,8 +1108,66 @@ unittest {
     HashMap!(int, C) hashMap;
 
     foreach(i;0..100) {
-        hashMap.put(i, new C(i));
+        hashMap[i] = new C(i);
     }
-    C* v = hashMap.getOrAdd(-1, () => new C(-1));
+    C v = hashMap.getOrAdd(-1, () => new C(-1));
     assert(-1 in hashMap && v.v == "-1");
+    assert(hashMap[-1].v == "-1");
+    hashMap[-1].v ~= "1";
+    assert(hashMap[-1].v == "-11");
+    assertThrown!KeyNotFound(hashMap[-2]);
+    // check lazyness
+    bool called;
+    v = hashMap.getOrAdd(-1, delegate C() {called = true; return new C(0);});
+    assert(!called);
+    v = hashMap.getOrAdd(-2, delegate C() {called = true; return new C(0);});
+    assert(called);
+}
+
+@safe @nogc unittest
+{
+    // test of nogc getOrAdd with lazy default value
+    // corner case when V is callable
+
+    alias F = int function() @safe @nogc;
+
+    F one = function()
+    {
+        return 1;
+    };
+    F two = function()
+    {
+        return 2;
+    };
+    F three = function()
+    {
+        return 3;
+    };
+    F four = function()
+    {
+        return 4;
+    };
+    HashMap!(int, F) hashMap;
+    hashMap.put(1, one);
+    hashMap.put(2, two);
+    auto p = 1 in hashMap;
+    assert(p);
+    assert((*p)() == 1);
+    p = 2 in hashMap;
+    assert(p);
+    assert((*p)() == 2);
+    auto f3 = hashMap.getOrAdd(3, () => function int() {return 3;}); // used as default()
+    assert(f3() == 3);
+    auto f4 = hashMap.getOrAdd(4, four);
+    assert(f4() == 4);
+}
+
+// test get()
+@safe @nogc unittest
+{
+    HashMap!(int, int) hashMap;
+    int i = hashMap.get(1, 55);
+    assert(i == 55);
+    i = hashMap.get(1, () => 66);
+    assert(i == 66);
 }

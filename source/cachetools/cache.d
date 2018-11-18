@@ -18,8 +18,8 @@ import optional;
 ///
 
 private import std.format;
-private import stdx.allocator;
-private import stdx.allocator.mallocator : Mallocator;
+private import std.experimental.allocator;
+private import std.experimental.allocator.mallocator : Mallocator;
 
 class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
 {
@@ -49,7 +49,7 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         uint                            __ttl;
     }
 
-    Nullable!V get(K k) @safe
+   public Nullable!V get(K k) @safe
     {
         debug(cachetools) tracef("get %s", k);
         auto store_p = k in __map;
@@ -71,7 +71,7 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         return Nullable!V(store_p.value);
     }
 
-    void put(K k, V v) @safe
+    public void put(K k, V v) @safe
     {
         time_t ts = time(null);
         auto store_p = k in __map;
@@ -116,7 +116,7 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         }
     }
 
-    bool remove(K k)
+    public bool remove(K k) @safe
     {
         debug(cachetools) tracef("remove from cache %s", k);
         auto map_ptr = k in __map;
@@ -131,33 +131,33 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         return true;
     }
 
-    void clear()
+    public void clear() @safe
     {
         __map.clear();
         __elements.clear();
     }
 
-    ulong length() const @safe @nogc
+    public size_t length() const @safe @nogc
     {
         return __elements.length;
     }
 
-    void size(size_t s) @safe @nogc
+    public void size(size_t s) @safe @nogc
     {
         __size = s;
     }
 
-    size_t size() const @safe @nogc
+    public size_t size() const @safe @nogc
     {
         return __size;
     }
 
-    void ttl(uint d) @safe @nogc
+    public void ttl(uint d) @safe @nogc
     {
         __ttl = d;
     }
 
-    uint ttl() const @safe @nogc
+    public uint ttl() const @safe @nogc
     {
         return __ttl;
     }
