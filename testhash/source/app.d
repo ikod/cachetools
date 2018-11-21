@@ -11,6 +11,7 @@ import containers.hashmap;
 
 import cachetools.containers.hashmap: CTHashMap = HashMap;
 import cachetools.cache: CacheLRUCT = CacheLRU;
+import cachetools.hash: hash_function;
 
 immutable iterations = 1_000_000;
 immutable trials = 1;
@@ -275,12 +276,46 @@ struct LARGE {
     long l2;
     long l3;
     long l4;
-    this(int i) @safe @nogc
+    hash_t toHash() const @safe @nogc
     {
-        i = i;
+        return hash_function(i);
+    }
+    bool opEquals(ref const LARGE other) pure const @safe nothrow
+    {
+        return i == other.i;
+    }
+    this(int i) inout @safe @nogc
+    {
+        this.i = i;
         l = i;
         d = i;
         s = "large struct";// to!string(i);
+    }
+}
+class CLASS {
+    import std.conv;
+    int i;
+    long l;
+    double d;
+    string s;
+    long l1;
+    long l2;
+    long l3;
+    long l4;
+    override hash_t toHash() const @safe @nogc
+    {
+        return hash_function(i);
+    }
+    bool opEquals(const CLASS other) pure const @safe nothrow
+    {
+        return i == other.i;
+    }
+    this(int i) immutable @safe @nogc
+    {
+        this.i = i;
+        l = i;
+        d = i;
+        s = "large class";// to!string(i);
     }
 }
 void LARGE_AA() @safe {
@@ -359,6 +394,167 @@ void HMLARGE() {
     }
     gcstop = () @trusted {return GC.stats;}();
 }
+
+void structkey_AA() @safe {
+    gcstart = () @trusted {return GC.stats;}();
+
+    int[immutable LARGE] c;
+
+    foreach(i;0..iterations) {
+        int k = randw[i];
+        c[LARGE(k)] = k;
+    }
+
+    foreach(i; 0..iterations) {
+        immutable k = immutable LARGE(randr[i]);
+        auto v = k in c;
+        if ( v ) {
+            hits++;
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+void structkey_OA() @safe {
+    gcstart = () @trusted {return GC.stats;}();
+
+    CTHashMap!(immutable LARGE, int) c;
+
+    foreach(i;0..iterations) {
+        int k = randw[i];
+        c[LARGE(k)] = k;
+    }
+
+    foreach(i; 0..iterations) {
+        immutable k = immutable LARGE(randr[i]);
+        auto v = k in c;
+        if ( v ) {
+            hits++;
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+void structkey_OAGC() @safe {
+    gcstart = () @trusted {return GC.stats;}();
+
+    CTHashMap!(immutable LARGE, int, GCAllocator) c;
+
+    foreach(i;0..iterations) {
+        int k = randw[i];
+        c[LARGE(k)] = k;
+    }
+
+    foreach(i; 0..iterations) {
+        immutable k = immutable LARGE(randr[i]);
+        auto v = k in c;
+        if ( v ) {
+            hits++;
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+void structkey_emsi()
+{
+    gcstart = () @trusted {return GC.stats;}();
+
+    HashMap!(immutable LARGE, int) c;
+
+    foreach(i;0..iterations) {
+        int k = randw[i];
+        c[LARGE(k)] = k;
+    }
+
+    foreach(i; 0..iterations) {
+        immutable k = immutable LARGE(randr[i]);
+        auto v = k in c;
+        if ( v ) {
+            hits++;
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+
+void classkey_AA() @safe {
+    gcstart = () @trusted {return GC.stats;}();
+
+    int[immutable CLASS] c;
+
+    foreach(i;0..iterations) {
+        int k = randw[i];
+        immutable key = new immutable CLASS(k);
+        c[key] = i;
+    }
+
+    foreach(i; 0..iterations) {
+        immutable k = new immutable CLASS(randr[i]);
+        auto v = k in c;
+        if ( v ) {
+            hits++;
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+void classkey_OA() @safe {
+    gcstart = () @trusted {return GC.stats;}();
+
+    CTHashMap!(immutable CLASS, int) c;
+
+    foreach(i;0..iterations) {
+        int k = randw[i];
+        immutable key = new immutable CLASS(k);
+        c[key] = i;
+    }
+
+    foreach(i; 0..iterations) {
+        immutable k = new immutable CLASS(randr[i]);
+        auto v = k in c;
+        if ( v ) {
+            hits++;
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+void classkey_OAGC() @safe
+{
+    gcstart = () @trusted {return GC.stats;}();
+
+    CTHashMap!(immutable CLASS, int, GCAllocator) c;
+
+    foreach(i;0..iterations) {
+        int k = randw[i];
+        immutable key = new immutable CLASS(k);
+        c[key] = i;
+    }
+
+    foreach(i; 0..iterations) {
+        immutable k = new immutable CLASS(randr[i]);
+        auto v = k in c;
+        if ( v ) {
+            hits++;
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+//void classkey_emsi()
+//{
+//    gcstart = () @trusted {return GC.stats;}();
+//
+//    HashMap!(immutable CLASS, int) c;
+//
+//    foreach(i;0..iterations) {
+//        int k = randw[i];
+//        immutable key = new immutable CLASS(k);
+//        c[key] = i;
+//    }
+//
+//    foreach(i; 0..iterations) {
+//        immutable k = new immutable CLASS(randr[i]);
+//        auto v = k in c;
+//        if ( v ) {
+//            hits++;
+//        }
+//    }
+//    gcstop = () @trusted {return GC.stats;}();
+//}
 
 void test_dlist_std()
 {
@@ -512,6 +708,7 @@ void test_ct_cache_gc()
 
 void main()
 {
+
     import std.string;
     string test;
     Duration[1] r;
@@ -598,6 +795,60 @@ void main()
         writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
     }
 
+    writeln("\n", center(" Test inserts and lookups for int[struct] ", 50, ' '));
+    writeln(      center(" ======================================= ", 50, ' '));
+
+    GC.collect();GC.minimize();
+    test = "std";
+    r = benchmark!(structkey_AA)(trials);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "c.t.";
+    r = benchmark!(structkey_OA)(trials);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "c.t.+GC";
+    r = benchmark!(structkey_OAGC)(trials);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    version(Posix)
+    {
+        GC.collect();GC.minimize();
+        test = "emsi";
+        r = benchmark!(structkey_emsi)(trials);
+        writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    }
+
+    writeln("\n", center(" Test inserts and lookups for int[class] ", 50, ' '));
+    writeln(      center(" ======================================= ", 50, ' '));
+
+    GC.collect();GC.minimize();
+    test = "std";
+    r = benchmark!(classkey_AA)(trials);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "c.t.";
+    r = benchmark!(classkey_OA)(trials);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "c.t.+GC";
+    r = benchmark!(structkey_OAGC)(trials);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    // emsi wont compile with immutable class
+    //version(Posix)
+    //{
+    //    GC.collect();GC.minimize();
+    //    test = "emsi";
+    //    r = benchmark!(classkey_emsi)(trials);
+    //    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    //}
+
+
     writeln("\n", center(" Test word counting int[string]", 50, ' '));
     writeln(      center(" ============================= ", 50, ' '));
 
@@ -681,4 +932,5 @@ void main()
     test = "c.t+GC";
     r = benchmark!(test_ct_cache_gc)(trials);
     writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
 }

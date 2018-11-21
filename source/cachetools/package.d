@@ -3,6 +3,7 @@ module cachetools;
 public import cachetools.interfaces;
 public import cachetools.cache;
 public import cachetools.containers.hashmap;
+public import cachetools.hash;
 
 public struct Cache(K, V) {
     private {

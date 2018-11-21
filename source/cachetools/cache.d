@@ -10,8 +10,6 @@ import std.experimental.logger;
 import core.stdc.time;
 import std.datetime;
 
-import optional;
-
 ///
 /// CacheFIFO contains exactly `size` items
 /// Replacement policy - evict oldest entry

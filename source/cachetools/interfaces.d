@@ -3,8 +3,6 @@ module cachetools.interfaces;
 import std.typecons;
 import std.datetime;
 
-import optional;
-
 //
 // cache have aspects:
 // 1. storage: hashmap and some kind of order of elements

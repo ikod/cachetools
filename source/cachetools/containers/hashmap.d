@@ -8,8 +8,6 @@ import std.typecons;
 import core.memory;
 import core.bitop;
 
-import optional;
-
 private import std.experimental.allocator;
 private import std.experimental.allocator.mallocator: Mallocator;
 
@@ -94,8 +92,21 @@ struct HashMap(K, V, Allocator = Mallocator) {
     enum grow_factor = 2;
     enum inlineValues = true;//SmallValueFootprint!V();
     enum InlineValueOrClass = inlineValues || is(V==class);
-    enum overload_threshold = 0.75;
-    enum deleted_threshold = 0.2;
+
+    static if ( is(K==class) && 
+            ( __traits(isSame, QualifierOf!K, ImmutableOf) || __traits(isSame, QualifierOf!K, ConstOf)) )
+    {
+        alias StoredKeyType = Rebindable!K;
+    }
+    else static if (is(K==struct) &&
+            ( __traits(isSame, QualifierOf!K, ImmutableOf) || __traits(isSame, QualifierOf!K, ConstOf)) )
+    {
+        alias StoredKeyType = Unqual!K;
+    }
+    else
+    {
+        alias StoredKeyType = K;
+    }
 
     private {
         alias   allocator = Allocator.instance;
@@ -117,8 +128,8 @@ struct HashMap(K, V, Allocator = Mallocator) {
         }
 
         struct _Bucket {
-            hash_t  hash;
-            K       key;
+            hash_t          hash;
+            StoredKeyType   key;
             static if (InlineValueOrClass)
             {
                 V   value;
@@ -126,19 +137,6 @@ struct HashMap(K, V, Allocator = Mallocator) {
             else
             {
                 V*  value_ptr;
-            }
-            this(_Bucket o)
-            {
-                hash = o.hash;
-                key = o.key;
-                static if (InlineValueOrClass)
-                {
-                    value = o.value;
-                }
-                else
-                {
-                    value_ptr = o.value_ptr;
-                }
             }
             string toString() const {
                 import std.format;
@@ -164,11 +162,15 @@ struct HashMap(K, V, Allocator = Mallocator) {
     }
 
     ~this() @safe {
-        if ( _buckets_num > 0 ) {
-            static if ( !InlineValueOrClass ) {
-                for(int i=0;i<_buckets_num;i++) {
+        if ( _buckets_num > 0 )
+        {
+            static if ( !InlineValueOrClass )
+            {
+                for(int i=0;i<_buckets_num;i++)
+                {
                     auto t = _buckets[i].hash;
-                    if ( t <= DELETED_HASH ) {
+                    if ( t <= DELETED_HASH )
+                    {
                         continue;
                     }
                     (() @trusted {dispose(allocator, _buckets[i].value_ptr);})();
@@ -215,8 +217,8 @@ struct HashMap(K, V, Allocator = Mallocator) {
     private hash_t findEntryIndex(const hash_t start_index, const hash_t hash, in K key) pure const @safe
     in
     {
-        assert(hash < DELETED_HASH);
-        assert(start_index < _buckets_num);
+        assert(hash < DELETED_HASH);        // we look for real hash
+        assert(start_index < _buckets_num); // start position inside array
     }
     do {
         hash_t index = start_index;
@@ -260,7 +262,8 @@ struct HashMap(K, V, Allocator = Mallocator) {
 
             () @nogc @trusted {debug(cachetools) tracef("test update index %d (%s) for key %s", index, _buckets[index], key);}();
 
-            if ( h <= DELETED_HASH ) { // empty or deleted
+            if ( h <= DELETED_HASH ) // empty or deleted
+            {
                 () @nogc @trusted {debug(cachetools) tracef("test update index %d (%s) for key %s - success", index, _buckets[index], key);}();
                 return index;
             }
@@ -502,7 +505,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
             }
             else
             {
-                r = b.value_ptr = make!(V)(allocator);
+                r = bucket.value_ptr = make!(V)(allocator);
                 *r = v;
             }
         }
@@ -725,6 +728,38 @@ struct HashMap(K, V, Allocator = Mallocator) {
 
 /// Tests
 
+/// test immutable struct and class as Key type
+@safe unittest
+{
+    struct S
+    {
+        int s;
+    }
+    HashMap!(immutable S, int) hs;
+    immutable ss = S(1);
+    hs[ss] = 1;
+    assert(hs[ss] == 1);
+
+    // class
+    class C
+    {
+        int v;
+        this(int _v) pure inout
+        {
+            v = _v;
+        }
+        bool opEquals(const C o) pure const @safe @nogc nothrow {
+            return v == o.v;
+        }
+        override hash_t toHash() const @safe @nogc {
+            return hash_function(v);
+        }
+    }
+    HashMap!(immutable C, int) hc;
+    immutable cc = new immutable C(1);
+    hc[cc] = 1;
+    assert(hc[cc] == 1);
+}
 @safe unittest {
     // test class as key
     globalLogLevel = LogLevel.info;

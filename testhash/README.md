@@ -76,49 +76,62 @@ Count words in Shakespeare texts (5M file).
 ```
         Test inserts and lookups int[int]         
         =================================         
-|std     | 277 ms, 841 μs, and 8 hnsecs    | GC memory Δ 41MB|
-|c.t.    | 182 ms, 354 μs, and 1 hnsec     | GC memory Δ 0MB|
-|c.t.+GC | 182 ms, 867 μs, and 4 hnsecs    | GC memory Δ 16MB|
-|emsi    | 610 ms, 193 μs, and 3 hnsecs    | GC memory Δ 0MB|
+|std     | 291 ms, 579 μs, and 8 hnsecs    | GC memory Δ 41MB|
+|c.t.    | 180 ms, 852 μs, and 4 hnsecs    | GC memory Δ 0MB|
+|c.t.+GC | 178 ms and 106 μs               | GC memory Δ 16MB|
+|emsi    | 642 ms, 560 μs, and 7 hnsecs    | GC memory Δ 0MB|
 
      Test insert, remove, lookup for int[int]     
      =======================================      
-|std     | 327 ms, 489 μs, and 4 hnsecs    | GC memory Δ 17MB|
-|c.t.    | 232 ms, 498 μs, and 3 hnsecs    | GC memory Δ 0MB|
-|c.t.+GC | 233 ms, 632 μs, and 9 hnsecs    | GC memory Δ 16MB|
-|emsi    | 644 ms, 370 μs, and 8 hnsecs    | GC memory Δ 0MB|
+|std     | 326 ms, 234 μs, and 1 hnsec     | GC memory Δ 17MB|
+|c.t.    | 230 ms, 121 μs, and 9 hnsecs    | GC memory Δ 0MB|
+|c.t.+GC | 235 ms and 426 μs               | GC memory Δ 16MB|
+|emsi    | 676 ms, 971 μs, and 8 hnsecs    | GC memory Δ 0MB|
 
      Test inserts and lookups for struct[int]     
      =======================================      
-|std     | 463 ms, 945 μs, and 1 hnsec     | GC memory Δ 109MB|
-|c.t.    | 386 ms, 950 μs, and 8 hnsecs    | GC memory Δ 0MB|
-|c.t.+GC | 383 ms, 709 μs, and 9 hnsecs    | GC memory Δ 88MB|
-|emsi    | 1 sec, 282 ms, 897 μs, and 3 h  | GC memory Δ 0MB|
+|std     | 464 ms, 347 μs, and 4 hnsecs    | GC memory Δ 109MB|
+|c.t.    | 396 ms, 443 μs, and 2 hnsecs    | GC memory Δ 0MB|
+|c.t.+GC | 397 ms, 112 μs, and 9 hnsecs    | GC memory Δ 88MB|
+|emsi    | 1 sec, 343 ms, 178 μs, and 7 h  | GC memory Δ 0MB|
+
+     Test inserts and lookups for int[struct]     
+     =======================================      
+|std     | 376 ms, 172 μs, and 2 hnsecs    | GC memory Δ 109MB|
+|c.t.    | 368 ms, 806 μs, and 9 hnsecs    | GC memory Δ 0MB|
+|c.t.+GC | 398 ms, 859 μs, and 4 hnsecs    | GC memory Δ 88MB|
+|emsi    | 1 sec, 592 ms, 714 μs, and 3 h  | GC memory Δ 0MB|
+
+     Test inserts and lookups for int[class]      
+     =======================================      
+|std     | 1 sec, 467 ms, and 167 μs       | GC memory Δ 171MB|
+|c.t.    | 975 ms, 893 μs, and 3 hnsecs    | GC memory Δ 164MB|
+|c.t.+GC | 397 ms, 876 μs, and 3 hnsecs    | GC memory Δ 88MB|
 
           Test word counting int[string]          
           =============================           
-|std     | 128 ms, 385 μs, and 4 hnsecs    | GC memory Δ 5MB|
-|c.t.    | 106 ms, 890 μs, and 5 hnsecs    | GC memory Δ 1MB|
-|c.t.+GC | 114 ms, 499 μs, and 6 hnsecs    | GC memory Δ 5MB|
-|emsi    | 282 ms, 294 μs, and 6 hnsecs    | GC memory Δ 1MB|
+|std     | 120 ms, 151 μs, and 3 hnsecs    | GC memory Δ 5MB|
+|c.t.    | 109 ms, 424 μs, and 1 hnsec     | GC memory Δ 1MB|
+|c.t.+GC | 106 ms, 643 μs, and 5 hnsecs    | GC memory Δ 5MB|
+|emsi    | 295 ms, 801 μs, and 6 hnsecs    | GC memory Δ 1MB|
 
         Test double-linked list DList!int         
         =================================         
-|std     | 56 ms, 658 μs, and 4 hnsecs     | GC memory Δ 30MB|
-|c.t.    | 80 ms, 537 μs, and 5 hnsecs     | GC memory Δ 0MB|
-|c.t.+GC | 42 ms, 8 μs, and 2 hnsecs       | GC memory Δ 30MB|
-|emsi    | 79 ms, 307 μs, and 4 hnsecs     | GC memory Δ 0MB|
+|std     | 56 ms, 249 μs, and 7 hnsecs     | GC memory Δ 30MB|
+|c.t.    | 83 ms, 7 μs, and 5 hnsecs       | GC memory Δ 0MB|
+|c.t.+GC | 42 ms, 881 μs, and 4 hnsecs     | GC memory Δ 30MB|
+|emsi    | 81 ms, 668 μs, and 9 hnsecs     | GC memory Δ 0MB|
 
         Test double-linked list of structs        
         ==================================        
-|std     | 307 ms, 468 μs, and 7 hnsecs    | GC memory Δ 122MB|
-|c.t.    | 89 ms, 477 μs, and 6 hnsecs     | GC memory Δ 0MB|
-|c.t.+GC | 216 ms, 175 μs, and 8 hnsecs    | GC memory Δ 122MB|
-|emsi    | 401 ms, 938 μs, and 8 hnsecs    | GC memory Δ 0MB|
+|std     | 102 ms and 490 μs               | GC memory Δ 122MB|
+|c.t.    | 99 ms, 123 μs, and 8 hnsecs     | GC memory Δ 0MB|
+|c.t.+GC | 87 ms, 762 μs, and 1 hnsec      | GC memory Δ 122MB|
+|emsi    | 424 ms, 141 μs, and 4 hnsecs    | GC memory Δ 0MB|
 
                     Test cache                    
                     ==========                    
-|c.t     | 1 sec, 402 ms, 425 μs, and 9 h  | GC memory Δ 0MB|
-|c.t+GC  | 1 sec, 489 ms, and 436 μs       | GC memory Δ 141MB|
+|c.t     | 1 sec, 456 ms, 835 μs, and 7 h  | GC memory Δ 0MB|
+|c.t+GC  | 1 sec, 404 ms, and 243 μs       | GC memory Δ 141MB|
 
 ```
