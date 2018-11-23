@@ -47,8 +47,7 @@ struct MultiDList(T, int N, Allocator = Mallocator)
     }
     do
     {
-        auto n = make!(Node)(allocator);
-        n.payload = v;
+        auto n = make!(Node)(allocator, v);
         static foreach(index;0..N) {
             if ( _heads[index] is null ) {
                 _heads[index] = n;
@@ -429,8 +428,7 @@ struct SList(T, Allocator = Mallocator) {
     void insertFront(T v) @nogc @safe nothrow
     out{ assert(_first !is null && _last !is null);}
     do {
-        auto n = make!(_Node!T)(allocator);
-        n.v = v;
+        auto n = make!(_Node!T)(allocator, v);
         if ( _first !is null ) {
             n._next = _first;
         }
@@ -444,8 +442,7 @@ struct SList(T, Allocator = Mallocator) {
     void insertBack(T v) @nogc @safe nothrow
     out{ assert(_first !is null && _last !is null);}
     do {
-        auto n = make!(_Node!T)(allocator);
-        n.v = v;
+        auto n = make!(_Node!T)(allocator, v);
         if ( _last !is null ) {
             _last._next = n;
         } else {

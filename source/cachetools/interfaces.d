@@ -2,7 +2,7 @@ module cachetools.interfaces;
 
 import std.typecons;
 import std.datetime;
-
+import std.typecons;
 //
 // cache have aspects:
 // 1. storage: hashmap and some kind of order of elements
@@ -10,14 +10,23 @@ import std.datetime;
 // 3. eviction policy (condition to start/stop evinction)
 //
 
+enum PutResultFlag
+{
+    None,
+    Inserted = 1 << 0,
+    Replaced = 1 << 1,
+    Evicted  = 1 << 2
+}
+alias PutResult = BitFlags!PutResultFlag;
+
 // implements storage aspect of cache
 interface Cache(K, V) {
 
     // get value from cache
     Nullable!V get(K) @safe;
 
-    // put value to cache
-    void put(K, V) @safe;
+    // put/update cache entry
+    PutResult put(K, V) @safe;
 
     // remove key
     bool  remove(K) @safe;
@@ -26,17 +35,17 @@ interface Cache(K, V) {
     void  clear() @safe;
     
     // # of elements
-    ulong length() const @safe @nogc;
+    ulong length() const @safe;
 
 }
 
-template RemovedEntry(K, V) {
-    alias RemovedEntry = Tuple!(K, "key", V, "value");
+struct CacheEvent(K, V)
+{
+    enum Event
+    {
+        Removed,
+        Updated
+    }
+    K key;
+    V val;
 }
-
-interface RemovedEntryListener(K, V) {
-    void add(K, V) @nogc @safe;
-    RemovedEntry!(K,V) get() @nogc @safe;
-    bool empty() const @nogc @safe;
-}
-

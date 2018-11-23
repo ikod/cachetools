@@ -1,26 +1,46 @@
 module cachetools.cache;
 
-import cachetools.interfaces;
-import cachetools.containers.hashmap;
-import cachetools.containers.lists;
-
 import std.typecons;
 import std.exception;
 import std.experimental.logger;
 import core.stdc.time;
 import std.datetime;
 
-///
-/// CacheFIFO contains exactly `size` items
-/// Replacement policy - evict oldest entry
-///
-
-private import std.format;
 private import std.experimental.allocator;
 private import std.experimental.allocator.mallocator : Mallocator;
 
+private import cachetools.interfaces;
+private import cachetools.containers.hashmap;
+private import cachetools.containers.lists;
+
+
+///
+/// CacheLRU contains maximum `size` items
+/// Eviction policy:
+/// 1. evict TTL-ed entry (if TTL)
+/// 2. if oldest entry not expired - evict oldes accessed (LRU)
+///
+/// User informed about evicted entries via cache event listener.
+///
+
 class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
 {
+    ///
+    /// Implemented as HashMap and multi-dlist.
+    ///
+    /// HashMap (by key) keep 
+    ///  1. cached value
+    ///  2. pointer to dlist element.
+    ///  3. creation time (to check expiration and purge expired entry on get())
+    ///  4. hits counter
+    ///
+    /// dlist keep key, cteation timestamp (to check expiration)
+    ///  1. key, so that we can remove entries from hashmap for lists heads (AccessIndex and TimeIndex)
+    ///  2. creation time, so that we can check expiration for 'TimeIndex'
+    ///
+    /// Each element in dlist have two sets of double-links - first set create order by access time, second set
+    ///  for creation time.
+    ///
     private
     {
         enum size_t AccessIndex = 0;
@@ -39,42 +59,51 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         alias allocator         = Allocator.instance;
         alias ListElementPtr    = __elements.Node*;
 
-        MultiDList!(ListElement, 2, Allocator)     __elements;
-        HashMap!(K, MapElement, Allocator)         __map;
+        MultiDList!(ListElement, 2, Allocator)  __elements;
+        HashMap!(K, MapElement, Allocator)      __map;
+        SList!(CacheEvent!(K,V))                __eventList;
 
         // configuration
         size_t                          __size = 1024;
         uint                            __ttl;
+        bool                            __reportCacheEvents;
     }
 
-   public Nullable!V get(K k) @safe
+    public Nullable!V get(K k) @safe
     {
         debug(cachetools) tracef("get %s", k);
-        auto store_p = k in __map;
-        if ( !store_p )
+        auto store_ptr = k in __map;
+        if ( !store_ptr )
         {
             return Nullable!V();
         }
-        if  (__ttl > 0 && time(null) - store_p.ts >= __ttl )
+        if  (__ttl > 0 && time(null) - store_ptr.ts >= __ttl )
         {
             // deactivate this entry
             // XXX send REMOVE to event listener
             __map.remove(k);
-            __elements.remove(store_p.list_element_ptr);
+            __elements.remove(store_ptr.list_element_ptr);
             return Nullable!V();
         }
-        store_p.hits++;
-        auto order_p = store_p.list_element_ptr;
+        store_ptr.hits++;
+        auto order_p = store_ptr.list_element_ptr;
         __elements.move_to_tail(order_p, AccessIndex);
-        return Nullable!V(store_p.value);
+        return Nullable!V(store_ptr.value);
     }
 
-    public void put(K k, V v) @safe
+    public PutResult put(K k, V v) @safe
+    out
+    {
+        assert(__result != PutResult(PutResultFlag.None));
+    }
+    do
     {
         time_t ts = time(null);
-        auto store_p = k in __map;
-        if ( !store_p ) // insert element
+        PutResult result;
+        auto store_ptr = k in __map;
+        if ( !store_ptr ) // insert element
         {
+            result = PutResultFlag.Inserted;
             if (__elements.length >= __size )
             {
                 ListElementPtr e;
@@ -88,30 +117,33 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
                 }
                 else
                 {
-                    // purge lru
+                    // purge lru element
                     e = __elements.head(AccessIndex);
                     debug(cachetools) tracef("purging lru %s", *e);
                 }
                 assert(e !is null);
                 __map.remove(e.key);
                 __elements.remove(e);
+                // XXX send PURGED event to event listener
+                result |= PutResultFlag.Evicted;
             }
             auto order_node = __elements.insert_last(ListElement(k, ts));
             MapElement e = {value:v, ts: ts, list_element_ptr: order_node};
             __map.put(k, e);
-            return;
         }
         else // update element
         {
-            debug(cachetools) tracef("update %s", *store_p);
-            ListElementPtr e = store_p.list_element_ptr;
+            result = PutResultFlag.Replaced;
+            debug(cachetools) tracef("update %s", *store_ptr);
+            ListElementPtr e = store_ptr.list_element_ptr;
             e.ts = ts;
             __elements.move_to_tail(e, TimeIndex);
 
-            // XXX send UPDATE to event listener
-            store_p.value = v;
-            store_p.ts = ts;
+            // XXX send UPDATE event to event listener
+            store_ptr.value = v;
+            store_ptr.ts = ts;
         }
+        return result;
     }
 
     public bool remove(K k) @safe
@@ -125,7 +157,7 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         ListElementPtr e = map_ptr.list_element_ptr;
         __map.remove(e.key);
         __elements.remove(e);
-        // XXX send remove to event listener
+        // XXX send REMOVE event to event listener
         return true;
     }
 
@@ -135,59 +167,60 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         __elements.clear();
     }
 
-    public size_t length() const @safe @nogc
+    public size_t length() pure nothrow const @safe @nogc
     {
         return __elements.length;
     }
 
-    public void size(size_t s) @safe @nogc
+    public void size(size_t s) pure nothrow @safe @nogc
     {
         __size = s;
     }
 
-    public size_t size() const @safe @nogc
+    public size_t size() pure nothrow const @safe @nogc
     {
         return __size;
     }
 
-    public void ttl(uint d) @safe @nogc
+    public void ttl(uint d) pure nothrow @safe @nogc
     {
         __ttl = d;
     }
 
-    public uint ttl() const @safe @nogc
+    public uint ttl() pure nothrow const @safe @nogc
     {
         return __ttl;
     }
 }
 
-unittest
+@safe unittest
 {
     import std.stdio;
     import std.datetime;
     import core.thread;
     globalLogLevel = LogLevel.info;
+    PutResult r;
 
     auto lru = new CacheLRU!(int, string);
     lru.size = 4;
     lru.ttl = 1;
     assert(lru.length == 0);
-    lru.put(1, "one");
-    lru.put(2, "two");
+    r = lru.put(1, "one"); assert(r == PutResult(PutResultFlag.Inserted));
+    r = lru.put(2, "two"); assert(r == PutResult(PutResultFlag.Inserted));
     auto v = lru.get(1);
     assert(v=="one");
-    lru.put(3, "three");
-    lru.put(4, "four");
+    r = lru.put(3, "three"); assert(r & PutResultFlag.Inserted);
+    r = lru.put(4, "four"); assert(r & PutResultFlag.Inserted);
     assert(lru.length == 4);
     // next put should purge...
-    lru.put(5, "five");
-    Thread.sleep(2.seconds);
+    r = lru.put(5, "five"); assert(r == PutResult(PutResultFlag.Evicted, PutResultFlag.Inserted));
+    () @trusted {Thread.sleep(2.seconds);}();
     v = lru.get(1); // it must be expired by ttl
     assert(v.isNull);
     assert(lru.length == 3);
-    lru.put(6, "six");
+    r = lru.put(6, "six"); assert(r == PutResult(PutResultFlag.Inserted));
     assert(lru.length == 4);
-    lru.put(7, "seven");
+    r = lru.put(7, "seven"); assert(r == PutResult(PutResultFlag.Evicted, PutResultFlag.Inserted));
     assert(lru.length == 4);
     lru.put(7, "7");
     assert(lru.length == 4);
@@ -235,55 +268,14 @@ class RemovedEntriesList(K, V): RemovedEntryListener!(K, V) {
         }
 }
 
-//@safe unittest {
-//    auto r = new RemovedEntriesList!(int, string)(16);
-//    () @nogc {
-//        assert(r.empty);
-//
-//        r.add(1, "one");
-//        assert(!r.empty);
-//        auto e = r.get();
-//        assert(e.key == 1 && e.value == "one");
-//        assert(r.empty);
-//        foreach (i; 0..14) {
-//            r.add(i, "string");
-//        }
-//
-//        while(!r.empty) {
-//            auto v = r.get();
-//        }
-//    }();
-//}
-//
-//@safe unittest {
-//
-//    alias K = int;
-//    alias V = string;
-//    FIFOPolicy!(K,V) cache = new FIFOPolicy!(K, V);
-//    RemovedEntryListener!(K, V) rel = new RemovedEntriesList!(K, V)();
-//    cache
-//        .removedEntryListener(rel)
-//        .maxLength(32);
-//
-//    () @nogc {
-//        import std.range;
-//        import std.algorithm;
-//
-//        SList!int removed_keys;
-//
-//        foreach (i; 0..1000) {
-//            cache.put(i, "string");
-//            while(!rel.empty) {
-//                auto kv = rel.get();
-//                removed_keys.insertBack(kv.key);
-//            }
-//        }
-//
-//        foreach(i; iota(968)) {
-//            assert(removed_keys.front == i);
-//            removed_keys.popFront();
-//        }
-//
-//    }();
-//}
-//
+@safe unittest
+{
+    struct S {}
+    CacheLRU!(immutable S, string)  cache;
+}
+
+@safe unittest
+{
+    //struct S {}
+    //CacheLRU!(string, immutable S)  cache;
+}

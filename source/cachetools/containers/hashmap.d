@@ -325,10 +325,16 @@ struct HashMap(K, V, Allocator = Mallocator) {
         immutable _new_buckets_num = dest;
         immutable _new_mask = dest - 1;
         _Bucket[] _new_buckets = makeArray!(_Bucket)(allocator, _new_buckets_num);
+
         () @trusted {GC.addRange(_new_buckets.ptr, _new_buckets_num * _Bucket.sizeof);}();
+
         // iterate over entries
-        () @nogc {debug(cachetools) trace("start resizing");}();
-        () @nogc {debug(cachetools) tracef("start resizing: old loadfactor: %s", (1.0*_allocated) / _buckets_num);}();
+
+        debug(cachetools)
+        {
+            () @nogc {tracef("start resizing: old loadfactor: %s", (1.0*_allocated) / _buckets_num);}();
+        }
+
         for(int i=0;i<_buckets_num;i++) {
             immutable hash_t h = _buckets[i].hash;
             if ( h < ALLOCATED_HASH ) { // empty or deleted
@@ -337,7 +343,9 @@ struct HashMap(K, V, Allocator = Mallocator) {
 
             immutable hash_t start_index = h & _new_mask;
             immutable new_position = findEmptyIndexExtended(start_index, _new_buckets, _new_mask);
-            () @nogc {debug(cachetools) tracef("old hash: %0x, old pos: %d, new_pos: %d", h, i, new_position);}();
+
+            debug(cachetools) () @nogc {tracef("old hash: %0x, old pos: %d, new_pos: %d", h, i, new_position);}();
+
             assert( new_position >= 0 );
             assert( _new_buckets[cast(hash_t)new_position].hash  == EMPTY_HASH );
 
@@ -353,8 +361,11 @@ struct HashMap(K, V, Allocator = Mallocator) {
         _mask = _buckets_num - 1;
         _deleted = 0;
         _empty = _buckets_num - _allocated;
-        () @nogc {debug(cachetools) trace("resizing done");}();
-        () @nogc {debug(cachetools) tracef("resizing done: new loadfactor: %s", (1.0*_allocated) / _buckets_num);}();
+
+        debug(cachetools)
+        {
+            () @nogc {tracef("resizing done: new loadfactor: %s", (1.0*_allocated) / _buckets_num);}();
+        }
     }
 
     ///
@@ -481,7 +492,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         _Bucket* bucket = &_buckets[placement_index];
         immutable h = bucket.hash;
 
-        () @nogc @trusted {debug(cachetools) tracef("start_index: %d, placement_index: %d", start_index, placement_index);}();
+        debug(cachetools) () @nogc @trusted {tracef("start_index: %d, placement_index: %d", start_index, placement_index);}();
 
         if ( h < ALLOCATED_HASH )
         {
@@ -490,13 +501,13 @@ struct HashMap(K, V, Allocator = Mallocator) {
         }
         static if ( InlineValueOrClass )
         {
-            () @nogc @trusted {debug(cachetools) tracef("place inline buckets[%d] '%s'='%s'", placement_index, k, v);}();
+            debug(cachetools) () @nogc @trusted {tracef("place inline buckets[%d] '%s'='%s'", placement_index, k, v);}();
             bucket.value = v;
             r = &bucket.value;
         }
         else
         {
-            () @nogc @trusted {debug(cachetools) tracef("place with allocation buckets[%d] '%s'='%s'", placement_index, k, v);}();
+            debug(cachetools) () @nogc @trusted {tracef("place with allocation buckets[%d] '%s'='%s'", placement_index, k, v);}();
             if ( (bucket.hash & TYPE_MASK) == ALLOCATED_HASH )
             {
                 // we just replace what we already allocated
@@ -522,7 +533,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         }
 
 
-        () @nogc @trusted {debug(cachetools) tracef("remove k: %s", k);}();
+        debug(cachetools) () @nogc @trusted {tracef("remove k: %s", k);}();
 
         immutable computed_hash = hash_function(k) & HASH_MASK;
         immutable start_index = computed_hash & _mask;
