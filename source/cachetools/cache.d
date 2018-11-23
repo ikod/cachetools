@@ -230,43 +230,6 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
     assert(lru.get(7).isNull);
 }
 
-class RemovedEntriesList(K, V): RemovedEntryListener!(K, V) {
-    private {
-        SList!(RemovedEntry!(K, V)) list;
-        ulong _limit;
-    }
-
-    this(ulong limit = 32) {
-            _limit = limit;
-            enforce!Exception(_limit >= 1);
-        }
-    
-        override void
-    add(K k, V v) @nogc @safe
-        //out { assert(list.length < _limit);}
-        do  {
-            debug(cachetools) tracef("insert into removed list (%d)%d", k, list.length);
-            if ( list.length == _limit) {
-                assert(0, "You exceeded RemovedList limit");
-            }
-            list.insertBack(RemovedEntry!(K, V)(k, v));
-            debug(cachetools) trace("inserted");
-        }
-
-        override 
-    RemovedEntry!(K, V) get() @safe @nogc
-        //in { assert(!list.empty); }
-        do {
-            auto kv = list.front();
-            list.popFront();
-            return kv;
-        }
-    
-        override bool
-    empty() @nogc @safe const {
-            return list.empty();
-        }
-}
 
 @safe unittest
 {
@@ -276,6 +239,6 @@ class RemovedEntriesList(K, V): RemovedEntryListener!(K, V) {
 
 @safe unittest
 {
-    //struct S {}
-    //CacheLRU!(string, immutable S)  cache;
+    struct S {}
+    CacheLRU!(string, immutable S)  cache;
 }
