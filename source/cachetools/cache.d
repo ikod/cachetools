@@ -240,5 +240,5 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
 @safe unittest
 {
     struct S {}
-    CacheLRU!(string, immutable S)  cache;
+    //CacheLRU!(string, immutable S)  cache;
 }

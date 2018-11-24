@@ -90,8 +90,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
 
     enum initial_buckets_num = 32;
     enum grow_factor = 2;
-    enum inlineValues = true;//SmallValueFootprint!V();
-    enum InlineValueOrClass = inlineValues || is(V==class);
+    enum inlineValues = true;//SmallValueFootprint!V()|| is(V==class);
 
     static if ( is(K==class) && 
             ( __traits(isSame, QualifierOf!K, ImmutableOf) || __traits(isSame, QualifierOf!K, ConstOf)) )
@@ -130,7 +129,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         struct _Bucket {
             hash_t          hash;
             StoredKeyType   key;
-            static if (InlineValueOrClass)
+            static if (inlineValues)
             {
                 V   value;
             }
@@ -140,7 +139,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
             }
             string toString() const {
                 import std.format;
-                static if (InlineValueOrClass) {
+                static if (inlineValues) {
                     return "%s, hash: %0x,key: %s, value: %s".format(
                         [EMPTY_HASH:"free", DELETED_HASH:"deleted", ALLOCATED_HASH:"allocated"][cast(long   )(hash & TYPE_MASK)],
                         hash, key, value);
@@ -164,7 +163,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
     ~this() @safe {
         if ( _buckets_num > 0 )
         {
-            static if ( !InlineValueOrClass )
+            static if ( !inlineValues )
             {
                 for(int i=0;i<_buckets_num;i++)
                 {
@@ -382,7 +381,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         if ( lookup_index == hash_t.max) {
             return null;
         }
-        static if ( InlineValueOrClass )
+        static if ( inlineValues )
         {
             return &_buckets[lookup_index].value;
         }
@@ -499,7 +498,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
             _allocated++;
             _empty--;
         }
-        static if ( InlineValueOrClass )
+        static if ( inlineValues )
         {
             debug(cachetools) () @nogc @trusted {tracef("place inline buckets[%d] '%s'='%s'", placement_index, k, v);}();
             bucket.value = v;
@@ -546,7 +545,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
 
         assert((_buckets[lookup_index].hash & TYPE_MASK) == ALLOCATED_HASH, "tried to remove non allocated bucket");
 
-        static if ( InlineValueOrClass )
+        static if ( inlineValues )
         {
             // what we have to do with removed values XXX?
         }
