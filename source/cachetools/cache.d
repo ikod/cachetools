@@ -9,6 +9,7 @@ import std.datetime;
 private import std.experimental.allocator;
 private import std.experimental.allocator.mallocator : Mallocator;
 
+private import cachetools.internal;
 private import cachetools.interfaces;
 private import cachetools.containers.hashmap;
 private import cachetools.containers.lists;
@@ -50,7 +51,7 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
             time_t              ts;     // creation
         }
         struct MapElement {
-            V                   value;  // value
+            StoredType!V        value;  // value
             ushort              hits;   // accesses
             time_t              ts;     // creation
             ListElementPtr      list_element_ptr;
@@ -234,11 +235,22 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
 @safe unittest
 {
     struct S {}
-    CacheLRU!(immutable S, string)  cache;
+    CacheLRU!(immutable S, string) cache = new CacheLRU!(immutable S, string);
 }
 
 @safe unittest
 {
-    struct S {}
-    //CacheLRU!(string, immutable S)  cache;
+    struct S
+    {
+        int s;
+    }
+    auto  cache = new CacheLRU!(string, immutable S);
+    immutable S s1 = immutable S(1);
+    cache.put("one", s1);
+    auto s11 = cache.get("one");
+    assert(s11 == s1);
+    immutable S s12 = immutable S(12);
+    cache.put("one", s12);
+    auto s121 = cache.get("one");
+    assert(s121 == s12);
 }

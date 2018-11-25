@@ -11,9 +11,9 @@ import core.bitop;
 private import std.experimental.allocator;
 private import std.experimental.allocator.mallocator: Mallocator;
 
+private import cachetools.internal;
 private import cachetools.hash;
 private import cachetools.containers.lists;
-
 
 class KeyNotFound: Exception
 {
@@ -92,35 +92,21 @@ struct HashMap(K, V, Allocator = Mallocator) {
     enum grow_factor = 2;
     enum inlineValues = true;//SmallValueFootprint!V()|| is(V==class);
 
-    static if ( is(K==class) && (is(K==immutable) || is(K==const)) )
-    {
-        alias StoredKeyType = Rebindable!K;
-    }
-    else static if (is(K==struct) && (is(K==immutable) || is(K==const)) )
-    {
-        alias StoredKeyType = Unqual!K;
-    }
-    else
-    {
-        alias StoredKeyType = K;
-    }
+    //static if ( is(K==class) && (is(K==immutable) || is(K==const)) )
+    //{
+    //    alias StoredKeyType = Rebindable!K;
+    //}
+    //else static if (is(K==struct) && (is(K==immutable) || is(K==const)) )
+    //{
+    //    alias StoredKeyType = Unqual!K;
+    //}
+    //else
+    //{
+    //    alias StoredKeyType = K;
+    //}
 
-    
-    static if ( is (V == immutable) || is(V==const) )
-    {
-        static if ( is(V==class) )
-        {
-            alias StoredValueType = Rebindable!V;
-        }
-        else
-        {
-            alias StoredValueType = Unqual!V;
-        }
-    }
-    else
-    {
-        alias StoredValueType = V;
-    }
+    alias StoredKeyType   = StoredType!K;
+    alias StoredValueType = StoredType!V;
 
     private {
         alias   allocator = Allocator.instance;
