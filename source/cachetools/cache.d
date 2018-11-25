@@ -62,7 +62,7 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
 
         MultiDList!(ListElement, 2, Allocator)  __elements;
         HashMap!(K, MapElement, Allocator)      __map;
-        SList!(CacheEvent!(K,V))                __eventList;
+        SList!(CacheEvent!(K,V), Allocator)     __events;
 
         // configuration
         size_t                          __size = 1024;
@@ -80,8 +80,14 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         }
         if  (__ttl > 0 && time(null) - store_ptr.ts >= __ttl )
         {
-            // deactivate this entry
-            // XXX send REMOVE to event listener
+            // remove expired entry
+            if ( __reportCacheEvents )
+            {
+                // store in event list
+                CacheEvent!(K,V) cache_event = {EventType.Expired, k, store_ptr.value};
+                __events.insertBack(cache_event);
+            }
+            // and remove from storage and list
             __map.remove(k);
             __elements.remove(store_ptr.list_element_ptr);
             return Nullable!V();
@@ -123,9 +129,14 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
                     debug(cachetools) tracef("purging lru %s", *e);
                 }
                 assert(e !is null);
+                if ( __reportCacheEvents )
+                {
+                    auto value_ptr = e.key in __map;
+                    CacheEvent!(K,V) cache_event = {EventType.Evicted, e.key, value_ptr.value};
+                    __events.insertBack(cache_event);
+                }
                 __map.remove(e.key);
                 __elements.remove(e);
-                // XXX send PURGED event to event listener
                 result |= PutResultFlag.Evicted;
             }
             auto order_node = __elements.insert_last(ListElement(k, ts));
@@ -139,8 +150,12 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
             ListElementPtr e = store_ptr.list_element_ptr;
             e.ts = ts;
             __elements.move_to_tail(e, TimeIndex);
-
-            // XXX send UPDATE event to event listener
+            if ( __reportCacheEvents )
+            {
+                auto v_ptr = e.key in __map;
+                CacheEvent!(K,V) cache_event = {EventType.Updated, e.key, v_ptr.value};
+                __events.insertBack(cache_event);
+            }
             store_ptr.value = v;
             store_ptr.ts = ts;
         }
@@ -156,9 +171,14 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
             return false;
         }
         ListElementPtr e = map_ptr.list_element_ptr;
+        if ( __reportCacheEvents )
+        {
+            auto v_ptr = e.key in __map;
+            CacheEvent!(K,V) cache_event = {EventType.Removed, e.key, v_ptr.value};
+            __events.insertBack(cache_event);
+        }
         __map.remove(e.key);
         __elements.remove(e);
-        // XXX send REMOVE event to event listener
         return true;
     }
 
@@ -173,9 +193,10 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         return __elements.length;
     }
 
-    public void size(size_t s) pure nothrow @safe @nogc
+    public auto size(size_t s) pure nothrow @safe @nogc
     {
         __size = s;
+        return this;
     }
 
     public size_t size() pure nothrow const @safe @nogc
@@ -183,14 +204,20 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         return __size;
     }
 
-    public void ttl(uint d) pure nothrow @safe @nogc
+    public auto ttl(uint d) pure nothrow @safe @nogc
     {
         __ttl = d;
+        return this;
     }
 
     public uint ttl() pure nothrow const @safe @nogc
     {
         return __ttl;
+    }
+    public auto enableCacheEvents() pure nothrow @safe @nogc
+    {
+        __reportCacheEvents = true;
+        return this;
     }
 }
 
@@ -203,8 +230,8 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
     PutResult r;
 
     auto lru = new CacheLRU!(int, string);
-    lru.size = 4;
-    lru.ttl = 1;
+    lru.size(4).ttl(1).enableCacheEvents();
+
     assert(lru.length == 0);
     r = lru.put(1, "one"); assert(r == PutResult(PutResultFlag.Inserted));
     r = lru.put(2, "two"); assert(r == PutResult(PutResultFlag.Inserted));
@@ -229,6 +256,10 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
     lru.clear();
     assert(lru.length == 0);
     assert(lru.get(7).isNull);
+    foreach(e; lru.__events)
+    {
+        writeln(*e);
+    }
 }
 
 

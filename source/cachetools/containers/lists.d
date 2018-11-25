@@ -425,7 +425,7 @@ struct SList(T, Allocator = Mallocator) {
         return Range!T(_first);
     }
 
-    void insertFront(T v) @nogc @safe nothrow
+    void insertFront(T v) @safe nothrow
     out{ assert(_first !is null && _last !is null);}
     do {
         auto n = make!(_Node!T)(allocator, v);
@@ -439,7 +439,7 @@ struct SList(T, Allocator = Mallocator) {
         _length++;
     }
 
-    void insertBack(T v) @nogc @safe nothrow
+    void insertBack(T v) @safe nothrow
     out{ assert(_first !is null && _last !is null);}
     do {
         auto n = make!(_Node!T)(allocator, v);

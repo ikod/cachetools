@@ -3,6 +3,9 @@ module cachetools.interfaces;
 import std.typecons;
 import std.datetime;
 import std.typecons;
+
+private import cachetools.internal;
+
 //
 // cache have aspects:
 // 1. storage: hashmap and some kind of order of elements
@@ -39,13 +42,17 @@ interface Cache(K, V) {
 
 }
 
+enum EventType
+{
+    Removed,
+    Expired,
+    Evicted,
+    Updated
+}
+
 struct CacheEvent(K, V)
 {
-    enum Event
-    {
-        Removed,
-        Updated
-    }
-    K key;
-    V val;
+    EventType       event;
+    StoredType!K    key;
+    StoredType!V    val;
 }
