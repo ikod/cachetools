@@ -36,7 +36,7 @@ struct MultiDList(T, int N, Allocator = Mallocator)
         size_t      _length;
         
     }
-    ulong length() const pure nothrow @safe @nogc {
+    size_t length() const pure nothrow @safe @nogc {
         return _length;
     }
 

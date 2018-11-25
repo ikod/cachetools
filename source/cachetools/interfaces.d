@@ -35,7 +35,7 @@ interface Cache(K, V) {
     void  clear() @safe;
     
     // # of elements
-    ulong length() const @safe;
+    size_t length() const @safe;
 
 }
 

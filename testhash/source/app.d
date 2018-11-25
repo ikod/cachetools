@@ -276,7 +276,7 @@ struct LARGE {
     long l2;
     long l3;
     long l4;
-    hash_t toHash() const @safe @nogc
+    hash_t toHash() const nothrow @safe @nogc
     {
         return hash_function(i);
     }

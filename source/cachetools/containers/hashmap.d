@@ -92,19 +92,34 @@ struct HashMap(K, V, Allocator = Mallocator) {
     enum grow_factor = 2;
     enum inlineValues = true;//SmallValueFootprint!V()|| is(V==class);
 
-    static if ( is(K==class) && 
-            ( __traits(isSame, QualifierOf!K, ImmutableOf) || __traits(isSame, QualifierOf!K, ConstOf)) )
+    static if ( is(K==class) && (is(K==immutable) || is(K==const)) )
     {
         alias StoredKeyType = Rebindable!K;
     }
-    else static if (is(K==struct) &&
-            ( __traits(isSame, QualifierOf!K, ImmutableOf) || __traits(isSame, QualifierOf!K, ConstOf)) )
+    else static if (is(K==struct) && (is(K==immutable) || is(K==const)) )
     {
         alias StoredKeyType = Unqual!K;
     }
     else
     {
         alias StoredKeyType = K;
+    }
+
+    
+    static if ( is (V == immutable) || is(V==const) )
+    {
+        static if ( is(V==class) )
+        {
+            alias StoredValueType = Rebindable!V;
+        }
+        else
+        {
+            alias StoredValueType = Unqual!V;
+        }
+    }
+    else
+    {
+        alias StoredValueType = V;
     }
 
     private {
@@ -131,7 +146,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
             StoredKeyType   key;
             static if (inlineValues)
             {
-                V   value;
+                StoredValueType   value;
             }
             else
             {
@@ -383,7 +398,15 @@ struct HashMap(K, V, Allocator = Mallocator) {
         }
         static if ( inlineValues )
         {
-            return &_buckets[lookup_index].value;
+            static if ( is(V==StoredValueType) )
+            {
+                return &_buckets[lookup_index].value;
+            }
+            else
+            {
+                V* r = () @trusted {return cast(V*)&_buckets[lookup_index].value;}();
+                return r;
+            }
         }
         else
         {
@@ -502,7 +525,14 @@ struct HashMap(K, V, Allocator = Mallocator) {
         {
             debug(cachetools) () @nogc @trusted {tracef("place inline buckets[%d] '%s'='%s'", placement_index, k, v);}();
             bucket.value = v;
-            r = &bucket.value;
+            static if ( is(V==StoredValueType) )
+            {
+                r = &bucket.value;
+            }
+            else
+            {
+                () @trusted {r = cast(V*)&bucket.value;}();
+            }
         }
         else
         {
@@ -741,14 +771,21 @@ struct HashMap(K, V, Allocator = Mallocator) {
 /// test immutable struct and class as Key type
 @safe unittest
 {
-    struct S
+    () @nogc
     {
-        int s;
-    }
-    HashMap!(immutable S, int) hs;
-    immutable ss = S(1);
-    hs[ss] = 1;
-    assert(hs[ss] == 1);
+        struct S
+        {
+            int s;
+        }
+        HashMap!(immutable S, int) hs1;
+        immutable ss = S(1);
+        hs1[ss] = 1;
+        assert(ss in hs1 && *(ss in hs1) == 1);
+        HashMap!(int, immutable S) hs2;
+        hs2[1] = ss;
+        assert(1 in hs2 && *(1 in hs2) == ss);
+        assert(!(2 in hs2));
+    }();
 
     // class
     class C
@@ -765,10 +802,13 @@ struct HashMap(K, V, Allocator = Mallocator) {
             return hash_function(v);
         }
     }
-    HashMap!(immutable C, int) hc;
+    HashMap!(immutable C, int) hc1;
     immutable cc = new immutable C(1);
-    hc[cc] = 1;
-    assert(hc[cc] == 1);
+    hc1[cc] = 1;
+    assert(hc1[cc] == 1);
+    HashMap!(int, immutable C) hc2;
+    hc2[1] = cc;
+    assert(hc2[1] is cc);
 }
 @safe unittest {
     // test class as key
