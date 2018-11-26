@@ -4,7 +4,6 @@ import std.typecons;
 import std.exception;
 import std.experimental.logger;
 import core.stdc.time;
-import std.datetime;
 
 private import std.experimental.allocator;
 private import std.experimental.allocator.mallocator : Mallocator;

@@ -92,19 +92,6 @@ struct HashMap(K, V, Allocator = Mallocator) {
     enum grow_factor = 2;
     enum inlineValues = true;//SmallValueFootprint!V()|| is(V==class);
 
-    //static if ( is(K==class) && (is(K==immutable) || is(K==const)) )
-    //{
-    //    alias StoredKeyType = Rebindable!K;
-    //}
-    //else static if (is(K==struct) && (is(K==immutable) || is(K==const)) )
-    //{
-    //    alias StoredKeyType = Unqual!K;
-    //}
-    //else
-    //{
-    //    alias StoredKeyType = K;
-    //}
-
     alias StoredKeyType   = StoredType!K;
     alias StoredValueType = StoredType!V;
 
