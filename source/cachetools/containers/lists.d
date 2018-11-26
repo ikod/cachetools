@@ -1,7 +1,7 @@
 module cachetools.containers.lists;
 
-private import stdx.allocator;
-private import stdx.allocator.mallocator : Mallocator;
+private import std.experimental.allocator;
+private import std.experimental.allocator.mallocator : Mallocator;
 private import std.experimental.logger;
 private import std.format;
 

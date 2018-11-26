@@ -29,7 +29,7 @@ Default values for TTL is 0 which means - no TTL. Default value for size is 1024
 
 ### Class instance as key ###
 
-To use class as key with this code, you have to define toHash and opEquals as safe or trusted (optionally as nogc if
+To use class as key with this code, you have to define toHash and opEquals(**important**: opEquals to the class instance not Object) as safe or trusted (optionally as nogc if
 you need it):
 
 ```d
@@ -89,6 +89,73 @@ of CPU cache for small key/value types.
 Hash Table supports immutable keys and values. Due to language limitations you can't use structs with immutable/const
 members.
 
-All hash table code is `@safe` and require `@safe` or `@trusted` user supplied functions such as `toHash` or `opEquals`.
-It is also `@nogc` if `toHash` and `opEquals` are `@nogc`.
+All hash table code is `@safe` and require from user supplied functions such as `toHash` or `opEquals` also be safe (or trusted).
 
+It is also `@nogc` if `toHash` and `opEquals` are `@nogc`. `opIndex` is not `@nogc` as it can throw exception.
+
+Several code samples:
+
+```d
+import cachetools.containers.hashmap;
+
+string[] words = ["hello", "my", "friend", "hello"];
+
+void main()
+{
+    HashMap!(string, int) counter;
+
+    build0(counter); // build table (verbose variant)
+    report(counter);
+
+    counter.clear(); // clear table
+
+    build1(counter); // build table (less verbose variant)
+    report(counter);
+}
+
+/// verbose variant
+void build0(ref HashMap!(string, int) counter) @safe @nogc
+{
+    foreach(word; words)
+    {
+        auto w = word in counter;
+        if ( w !is null )
+        {
+            (*w)++; // update
+        }
+        else
+        {
+            counter[word] = 1; // create
+        }
+    }
+}
+/// short variant
+void build1(ref HashMap!(string, int) counter) @safe @nogc
+{
+    foreach(word; words)
+    {
+        auto w = word in counter;
+        counter.getOrAdd(word, 0)++;
+    }
+}
+
+void report(ref HashMap!(string, int) hashmap) @safe
+{
+    import std.stdio;
+    writefln("keys: %s", hashmap.byKey);
+    writefln("values: %s", hashmap.byValue);
+    writefln("pairs: %s", hashmap.byPair);
+    writeln("---");
+}
+```
+Output:
+```
+keys: ["hello", "friend", "my"]
+values: [2, 1, 1]
+pairs: [Tuple!(string, "key", int, "value")("hello", 2), Tuple!(string, "key", int, "value")("friend", 1), Tuple!(string, "key", int, "value")("my", 1)]
+---
+keys: ["hello", "friend", "my"]
+values: [2, 1, 1]
+pairs: [Tuple!(string, "key", int, "value")("hello", 2), Tuple!(string, "key", int, "value")("friend", 1), Tuple!(string, "key", int, "value")("my", 1)]
+---
+```

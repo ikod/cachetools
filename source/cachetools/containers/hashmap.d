@@ -1241,4 +1241,7 @@ unittest {
     assert(i == 55);
     i = hashMap.get(1, () => 66);
     assert(i == 66);
+    hashMap[1] = 1;
+    i = hashMap.get(1, () => 66);
+    assert(i == 1);
 }
