@@ -21,7 +21,7 @@ private import cachetools.containers.lists;
 /// 1. evict TTL-ed entry (if TTL)
 /// 2. if oldest entry not expired - evict oldes accessed (LRU)
 ///
-/// User informed about evicted entries via cache event listener.
+/// User can be informed about evicted entries via cache event list.
 ///
 
 class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
@@ -32,7 +32,7 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
     /// HashMap (by key) keep 
     ///  1. cached value
     ///  2. pointer to dlist element.
-    ///  3. creation time (to check expiration and purge expired entry on get())
+    ///  3. creation time (to check expiration and purge expired entry on get() without access to dlist)
     ///  4. hits counter
     ///
     /// dlist keep key, cteation timestamp (to check expiration)
@@ -40,34 +40,59 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
     ///  2. creation time, so that we can check expiration for 'TimeIndex'
     ///
     /// Each element in dlist have two sets of double-links - first set create order by access time, second set
-    ///  for creation time.
+    /// for creation time.
     ///
     private
     {
         enum size_t AccessIndex = 0;
         enum size_t TimeIndex = 1;
         struct ListElement {
-            K                   key;
-            time_t              ts;     // creation
+            K                   key;    // we keep key here so we can remove element from map when we evict with LRU or TTL)
+            time_t              ts;     // creation (we keep it here to check expiration for oldest element)
         }
         struct MapElement {
             StoredType!V        value;  // value
             ushort              hits;   // accesses
-            time_t              ts;     // creation
+            time_t              ts;     // creation (wee keep it here to check expiration on access)
             ListElementPtr      list_element_ptr;
         }
 
         alias allocator         = Allocator.instance;
         alias ListElementPtr    = __elements.Node*;
 
-        MultiDList!(ListElement, 2, Allocator)  __elements;
-        HashMap!(K, MapElement, Allocator)      __map;
-        SList!(CacheEvent!(K,V), Allocator)     __events;
+        MultiDList!(ListElement, 2, Allocator)  __elements; // keeps order by creation time and by access time
+        HashMap!(K, MapElement, Allocator)      __map;      // keeps MapElement by key
+        SList!(CacheEvent!(K,V), Allocator)     __events;   // unbounded list of cache events
 
         // configuration
-        size_t                          __size = 1024;
-        uint                            __ttl;
-        bool                            __reportCacheEvents;
+        size_t  __size = 1024;          // limit num of elements in cache
+        uint    __ttl;                  // use TTL if __ttl > 0
+        bool    __reportCacheEvents;    // will user read cache events?
+    }
+    struct CacheEventRange
+    {
+        SList!(CacheEvent!(K,V), Allocator) __events;
+        this(ref SList!(CacheEvent!(K,V), Allocator) events)
+        {
+            import std.algorithm.mutation: swap;
+            swap(__events, events);
+        }
+        bool empty() const nothrow pure
+        {
+            return __events.empty();
+        }
+        void popFront() pure nothrow
+        {
+            __events.popFront();
+        }
+        auto front()
+        {
+            return __events.front();
+        }
+        auto length() pure const nothrow @safe
+        {
+            return __events.length;
+        } 
     }
 
     public Nullable!V get(K k) @safe
@@ -219,6 +244,10 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         __reportCacheEvents = true;
         return this;
     }
+    public auto cacheEvents() @safe
+    {
+        return CacheEventRange(__events);
+    }
 }
 
 @safe unittest
@@ -226,6 +255,7 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
     import std.stdio;
     import std.datetime;
     import core.thread;
+    import std.algorithm;
     globalLogLevel = LogLevel.info;
     PutResult r;
 
@@ -256,19 +286,26 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
     lru.clear();
     assert(lru.length == 0);
     assert(lru.get(7).isNull);
-    foreach(e; lru.__events)
-    {
-        writeln(*e);
-    }
+    auto events = lru.cacheEvents();
+    assert(!events.empty);
+    assert(events.length() == 4);
+    assert(lru.__events.empty);
+    assert(equal(events.map!"a.key", [2,1,3,7]));
+    assert(equal(events.map!"a.val", ["two","one","three","seven"]));
 }
 
-
+// check if we can cache with immutable struct keys
 @safe unittest
 {
-    struct S {}
+    struct S {int s;}
     CacheLRU!(immutable S, string) cache = new CacheLRU!(immutable S, string);
+    immutable S s1 = immutable S(1);
+    cache.put(s1, "one");
+    auto s11 = cache.get(s1);
+    assert(s11 == "one");
 }
 
+// check if we can cache with immutable struct values
 @safe unittest
 {
     struct S
@@ -284,4 +321,62 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
     cache.put("one", s12);
     auto s121 = cache.get("one");
     assert(s121 == s12);
+}
+
+// check if we can cache with immutable class keys and values
+@safe unittest
+{
+    import cachetools.hash: hash_function;
+    class C
+    {
+        int s;
+        this(int v)
+        {
+            s = v;
+        }
+        override hash_t toHash() const
+        {
+            return hash_function(s);
+        }
+        bool opEquals(const C other) pure const @safe
+        {
+            return s == other.s;
+        }
+    }
+    CacheLRU!(immutable C, string) ick = new CacheLRU!(immutable C, string);
+    immutable C s1 = new immutable C(1);
+    ick.put(s1, "one");
+    auto s11 = ick.get(s1);
+    assert(s11 == "one");
+
+    CacheLRU!(string, immutable C) icv = new CacheLRU!(string, immutable C);
+    immutable C s1v = new immutable C(1);
+    icv.put("one", s1v);
+    auto s11v = icv.get("one");
+    assert(s11v is s1v);
+}
+
+///
+@safe unittest
+{
+    auto lru = new CacheLRU!(int, string);
+    lru.size = 2048; // keep 2048 elements in cache
+    lru.ttl = 60;    // set 60 seconds TTL for items in cache
+
+    lru.put(1, "one");
+    auto v = lru.get(0);
+    assert(v.isNull);   // no such item in cache
+    v = lru.get(1);
+    assert(v == "one"); // 1 is in cache
+}
+@safe unittest
+{
+    import std.stdio;
+    auto lru = new CacheLRU!(int, string);
+    lru.enableCacheEvents();
+    lru.put(1, "one");
+    lru.put(1, "next one");
+    assert(lru.get(1) == "next one");
+    auto events = lru.cacheEvents();
+    //writeln(events);
 }

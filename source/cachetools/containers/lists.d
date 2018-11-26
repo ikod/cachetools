@@ -347,7 +347,26 @@ struct DList(T, Allocator = Mallocator) {
 }
 
 struct SList(T, Allocator = Mallocator) {
-    this(this) @disable;
+    this(this) @safe
+    {
+        // copy items
+        _Node!T* __newFirst, __newLast;
+        auto f = _first;
+        while(f)
+        {
+            auto v = f.v;
+            auto n = make!(_Node!T)(allocator, v);
+            if ( __newLast !is null ) {
+                __newLast._next = n;
+            } else {
+                __newFirst = n;
+            }
+            __newLast = n;
+            f = f._next;
+        }
+        _first = __newFirst;
+        _last = __newLast;
+    }
 
     package {
         struct _Node(T) {
@@ -368,7 +387,10 @@ struct SList(T, Allocator = Mallocator) {
             ( _length == 0 && _first is null && _last is null)
         );
     }
-
+    ~this()
+    {
+        clear();
+    }
     ulong length() const pure @nogc @safe nothrow {
         return _length;
     }
