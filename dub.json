@@ -4,7 +4,6 @@
     "Igor Khasilev"
   ],
   "dependencies": {
-    "stdx-allocator": "~>2",
   },
   "buildTypes": {
     "debug": {
@@ -13,7 +12,7 @@
         "debugInfo"
       ],
       "dflags-dmd": [
-        "-g", "-gf", "-dip1008"
+        "-g", "-gf"
       ],
       "dflags-ldc": [
         "-d-debug=cachetools"
@@ -27,7 +26,7 @@
         "unittests", "debugMode", "debugInfo"
       ],
       "dflags-dmd": [
-        "-g", "-gf", "-dip1008"
+        "-g", "-gf"
       ],
       "dflags-ldc": [
         "-d-debug=cachetools"
@@ -41,7 +40,7 @@
         "profile", "optimize", "inline", "debugInfo"
       ],
       "dflags-dmd": [
-        "-g", "-gf", "-dip1000", "-dip1008", "-release"
+        "-g", "-gf", "-release"
       ],
       "dflags-ldc": [
         "-d-debug=cachetools"
@@ -53,6 +52,6 @@
   },
   "sourcePaths": ["source"],
   "importPaths": ["source"],
-  "description": "A minimal D application.",
+  "description": "Collection of cache strategies",
   "license": "MIT"
 }
