@@ -2,8 +2,8 @@
 
 This package contains some cache implementations (for example LRU cache) and underlying data structures.
 
-All code is `@safe`. It is also `@nogc` if key and value types support @nogc for some important operations.
-cachetools use std.experimantal.allocator with configurable allocator when it need allcation.
+Why you may want to use it? Because it is `@safe`. It is also `@nogc` (inherited from your key/value types).
+And it is fast.
 
 ### LRU cache ###
 

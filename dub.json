@@ -8,7 +8,8 @@
   "configurations":[
     {
       "name": "library",
-      "targetType": "library"
+      "targetType": "library",
+      "excludedSourceFiles": ["sources.app.d"]
     },
     {
       "name": "application",
