@@ -208,6 +208,14 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
 
     public void clear() @safe
     {
+        if ( __reportCacheEvents )
+        {
+            foreach(pair; __map.byPair)
+            {
+                CacheEvent!(K,V) cache_event = {EventType.Removed, pair.key, pair.value.value};
+                __events.insertBack(cache_event);
+            }
+        }
         __map.clear();
         __elements.clear();
     }
@@ -287,10 +295,10 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
     assert(lru.get(7).isNull);
     auto events = lru.cacheEvents();
     assert(!events.empty);
-    assert(events.length() == 4);
+    assert(events.length() == 8);
     assert(lru.__events.empty);
-    assert(equal(events.map!"a.key", [2,1,3,7]));
-    assert(equal(events.map!"a.val", ["two","one","three","seven"]));
+    assert(equal(events.map!"a.key", [2,1,3,7,6,7,5,4]));
+    assert(equal(events.map!"a.val", ["two","one","three","seven", "six", "7", "five", "four"]));
 }
 
 // check if we can cache with immutable struct keys
