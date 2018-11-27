@@ -9,7 +9,6 @@
     {
       "name": "library",
       "targetType": "library",
-      "excludedSourceFiles": ["sources.app.d"]
     },
     {
       "name": "application",
