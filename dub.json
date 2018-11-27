@@ -5,6 +5,16 @@
   ],
   "dependencies": {
   },
+  "configurations":[
+    {
+      "name": "library",
+      "targetType": "library"
+    },
+    {
+      "name": "application",
+      "targetType": "executable"
+    }
+  ],
   "buildTypes": {
     "debug": {
       "buildOptions": [
