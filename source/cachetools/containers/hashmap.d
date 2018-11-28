@@ -177,24 +177,24 @@ struct HashMap(K, V, Allocator = Mallocator) {
     /// Find any unallocated bucket starting from start_index (inclusive)
     /// Returns index on success or hash_t.max on fail
     ///
-    private hash_t findEmptyIndex(const hash_t start_index) pure const @safe @nogc
-    in
-    {
-        assert(start_index < _buckets_num);
-    }
-    do {
-        hash_t index = start_index;
-
-        do {
-            () @nogc {debug(cachetools) tracef("test index %d for non-ALLOCATED", index);}();
-            if ( _buckets[index].hash < ALLOCATED_HASH )
-            {
-                return index;
-            }
-            index = (index + 1) & _mask;
-        } while(index != start_index);
-        return hash_t.max;
-    }
+    //private hash_t findEmptyIndex(const hash_t start_index) pure const @safe @nogc
+    //in
+    //{
+    //    assert(start_index < _buckets_num);
+    //}
+    //do {
+    //    hash_t index = start_index;
+    //
+    //    do {
+    //        () @nogc {debug(cachetools) tracef("test index %d for non-ALLOCATED", index);}();
+    //        if ( _buckets[index].hash < ALLOCATED_HASH )
+    //        {
+    //            return index;
+    //        }
+    //        index = (index + 1) & _mask;
+    //    } while(index != start_index);
+    //    return hash_t.max;
+    //}
     ///
     /// Find allocated bucket for given key and computed hash starting from start_index
     /// Returns: index if bucket found or hash_t.max otherwise
@@ -818,18 +818,17 @@ struct HashMap(K, V, Allocator = Mallocator) {
     globalLogLevel = LogLevel.info;
     () @nogc {
         HashMap!(int, int) int2int;
-        foreach(i; 1..5) {
+        foreach(i; 0..15) {
             int2int.put(i,i);
         }
-        int2int.put(33,33); // <- follow key 1, move key 2 on pos 3
-        assert(1 in int2int, "1 not in hash");
-        assert(2 in int2int, "2 not in hash");
-        assert(1 in int2int, "3 not in hash");
-        assert(4 in int2int, "4 not in hash");
-        assert(33 in int2int, "33 not in hash");
-        int2int.remove(33);
-        int2int.put(2,2); // <- must replace key 2 on pos 3
-        assert(2 in int2int, "2 not in hash");
+        assert(int2int.length() == 15);
+        foreach(i; 0..15) {
+            assert(i in int2int);
+        }
+        foreach(i; 0..15) {
+            int2int.remove(i);
+        }
+        assert(int2int.length() == 0);
     }();
     () @nogc {
         struct LargeStruct {
