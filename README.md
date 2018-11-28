@@ -1,3 +1,6 @@
+[![Build Status](https://travis-ci.org/ikod/cachetools.svg?branch=master)](https://travis-ci.org/ikod/cachetools)
+[![codecov.io](https://codecov.io/github/ikod/cachetools/coverage.svg?branch=master)](https://codecov.io/github/ikod/cachetools?branch=master)
+
 # cachetools #
 
 This package contains some cache implementations (for example LRU cache) and underlying data structures.
