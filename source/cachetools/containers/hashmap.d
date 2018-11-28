@@ -171,7 +171,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
     }
     invariant {
         assert(_allocated>=0 && _deleted>=0 && _empty >= 0);
-        assert(_allocated + _deleted + _empty == _buckets_num, "a:%s + d:%s + e:%s != total: %s".format(_allocated, _deleted,  _empty, _buckets_num));
+        assert(_allocated + _deleted + _empty == _buckets_num);
     }
     ///
     /// Find any unallocated bucket starting from start_index (inclusive)
