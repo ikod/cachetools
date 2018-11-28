@@ -268,6 +268,8 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
 
     auto lru = new CacheLRU!(int, string);
     lru.size(4).ttl(1).enableCacheEvents();
+    assert(lru.size == 4);
+    assert(lru.ttl == 1);
 
     assert(lru.length == 0);
     r = lru.put(1, "one"); assert(r == PutResult(PutResultFlag.Inserted));
@@ -310,6 +312,8 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
     cache.put(s1, "one");
     auto s11 = cache.get(s1);
     assert(s11 == "one");
+    assert(cache.remove(s1));
+    assert(!cache.remove(S(2)));
 }
 
 // check if we can cache with immutable struct values
