@@ -182,11 +182,23 @@ struct MultiDList(T, int N, Allocator = Mallocator)
     assert(mdlist.tail(AgeIndex).payload.age == 10);
     mdlist.insert_last(&persons[0]); // B, C, A
     mdlist.remove(carl); // B, A
+    alice = mdlist.tail(NameIndex);
     assert(mdlist.length == 2);
-    assert(mdlist.tail(NameIndex).payload.name == "Alice");
-    assert(mdlist.tail(AgeIndex).payload.age == 11);
+    assert(alice.payload.name == "Alice");
+    assert(alice.payload.age == 11);
     assert(mdlist.head(NameIndex).payload.name == "Bob");
     assert(mdlist.head(AgeIndex).payload.age == 9);
+    assert(alice.prev(AgeIndex) == bob);
+    assert(alice.prev(NameIndex) == bob);
+    assert(bob.prev(AgeIndex) is null);
+    assert(bob.prev(NameIndex) is null);
+    assert(bob.next(AgeIndex) == alice);
+    assert(bob.next(NameIndex) == alice);
+    mdlist.insert_last(&persons[2]); // B, A, C
+    carl = mdlist.tail(NameIndex);
+    mdlist.move_to_tail(alice, AgeIndex);
+    assert(bob.next(AgeIndex) == carl);
+    assert(bob.next(NameIndex) == alice);
 }
 
 struct DList(T, Allocator = Mallocator) {
