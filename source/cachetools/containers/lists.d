@@ -520,7 +520,7 @@ struct SList(T, Allocator = Mallocator) {
     }
 }
 
-@safe @nogc unittest {
+@safe @nogc nothrow unittest {
     SList!int l;
     assert(l.length() == 0);
     l.insertFront(0);
@@ -587,7 +587,7 @@ struct SList(T, Allocator = Mallocator) {
     }
 }
 
-@safe @nogc unittest {
+@safe @nogc nothrow unittest {
     DList!int dlist;
     auto n0 = dlist.insertFront(0);
     assert(dlist.head.payload == 0);
