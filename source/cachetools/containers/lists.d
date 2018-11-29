@@ -180,6 +180,13 @@ struct MultiDList(T, int N, Allocator = Mallocator)
     assert(mdlist.tail(NameIndex).payload.name == "Carl");
     assert(mdlist.head(AgeIndex).payload.age == 9);
     assert(mdlist.tail(AgeIndex).payload.age == 10);
+    mdlist.insert_last(&persons[0]); // B, C, A
+    mdlist.remove(carl); // B, A
+    assert(mdlist.length == 2);
+    assert(mdlist.tail(NameIndex).payload.name == "Alice");
+    assert(mdlist.tail(AgeIndex).payload.age == 11);
+    assert(mdlist.head(NameIndex).payload.name == "Bob");
+    assert(mdlist.head(AgeIndex).payload.age == 9);
 }
 
 struct DList(T, Allocator = Mallocator) {
@@ -504,6 +511,9 @@ struct SList(T, Allocator = Mallocator) {
 @safe @nogc unittest {
     SList!int l;
     assert(l.length() == 0);
+    l.insertFront(0);
+    assert(l.front() == 0);
+    l.popFront();
     l.insertBack(1);
     assert(l.front() == 1);
     assert(l.length() == 1);
@@ -554,19 +564,22 @@ struct SList(T, Allocator = Mallocator) {
     foreach(i;0..100) {
         l1.insertBack(i);
     }
-    while(l.length) {
+    while(l1.length) {
         l1.popFront();
     }
     foreach(i;0..100) {
         l1.insertFront(i);
     }
-    while(l.length) {
+    while(l1.length) {
         l1.popFront();
     }
 }
 
-@safe unittest {
+@safe @nogc unittest {
     DList!int dlist;
+    auto n0 = dlist.insertFront(0);
+    assert(dlist.head.payload == 0);
+    dlist.remove(n0);
     auto n1 = dlist.insert_last(1);
     assert(dlist.length == 1);
     dlist.remove(n1);

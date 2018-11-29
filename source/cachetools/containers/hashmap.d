@@ -995,7 +995,9 @@ struct HashMap(K, V, Allocator = Mallocator) {
     assert(*v == 1);
 
 }
-
+///
+/// test byKey, byValue, byPair
+///
 @safe unittest
 {
     import std.algorithm;
@@ -1023,7 +1025,9 @@ struct HashMap(K, V, Allocator = Mallocator) {
     m.remove(2);
     assert(m.byPair.map!"tuple(a.key, a.value)".array.sort.length() == 0);
 }
-
+/// 
+/// compare equivalence to AA
+///
 unittest {
     import std.random;
     import std.array;
@@ -1048,7 +1052,9 @@ unittest {
     assert(equal(AA.values().sort(), hashMap.byValue().array.sort()));
     assert(AA.length == hashMap.length);
 }
-
+///
+/// check remove
+///
 @safe unittest
 {
     // test removal while iterating
@@ -1071,11 +1077,13 @@ unittest {
     }
     foreach(k; hashMap.byKey)
     {
-        hashMap.remove(k);
+        assert(hashMap.remove(k));
     }
     assert(hashMap.length == 0);
 }
-
+///
+/// test clear
+///
 @safe @nogc unittest
 {
     // test clear
@@ -1090,7 +1098,9 @@ unittest {
     hashMap[1] = 1;
     assert(1 in hashMap && hashMap.length == 1);
 }
-
+///
+/// test getOrAdd with value
+///
 @safe @nogc unittest
 {
     // test of nogc getOrAdd
@@ -1104,6 +1114,9 @@ unittest {
     assert(-1 in hashMap && v == -1);
 }
 
+///
+/// test getOrAdd with callable
+///
 @safe @nogc unittest
 {
     // test of nogc getOrAdd with lazy default value
@@ -1120,6 +1133,9 @@ unittest {
     assert(hashMap.get(-3, () => 0) == 0);  // ditto
 }
 
+///
+/// test getOrAdd with complex  data
+///
 @safe unittest
 {
     import std.socket;
@@ -1131,7 +1147,9 @@ unittest {
     assert(s1 !is null);
     assert(s1 is s0);
 }
-
+///
+/// test with real class (socket)
+///
 @safe unittest
 {
     import std.socket;
@@ -1180,7 +1198,9 @@ unittest {
     v = hashMap.getOrAdd(-2, delegate C() {called = true; return new C(0);});
     assert(called);
 }
-
+///
+/// test if we can handle some exotic value type
+///
 @safe @nogc unittest
 {
     // test of nogc getOrAdd with lazy default value
