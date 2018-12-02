@@ -1,7 +1,6 @@
 module cachetools.containers.hashmap;
 
 import std.traits;
-import std.experimental.logger;
 import std.format;
 import std.typecons;
 
@@ -69,22 +68,6 @@ private bool keyEquals(K)(const K a, const K b)
         return a == b;
     }
 }
-/*
-dub run -b release --compiler ldc2
-Running ./cachetools 
-AA!(int,int)    [137 ms, 348 μs, and 6 hnsecs]
-OA!(int,int)    [77 ms, 913 μs, and 1 hnsec]
-OA!(int,int) GC [80 ms, 571 μs, and 3 hnsecs]
----
-AA large        [122 ms and 157 μs]
-OA large        [177 ms, 167 μs, and 4 hnsecs]
-OA large GC     [125 ms, 771 μs, and 8 hnsecs]
----
-AA largeClass   [183 ms, 366 μs, and 3 hnsecs]
-OA largeClass   [124 ms, 617 μs, and 3 hnsecs]
-OA largeClassGC [106 ms, 407 μs, and 7 hnsecs]
----
-*/
 
 struct HashMap(K, V, Allocator = Mallocator) {
 
@@ -213,7 +196,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         do {
             immutable h = _buckets[index].hash;
 
-            () @nogc @trusted {debug(cachetools) tracef("test entry index %d (%s) for key %s", index, _buckets[index].toString, key);}();
+            debug(cachetools) safe_tracef("test entry index %d (%s) for key %s", index, _buckets[index], key);
 
             if ( h == EMPTY_HASH ) {
                 break;
@@ -247,17 +230,17 @@ struct HashMap(K, V, Allocator = Mallocator) {
         do {
             immutable h = _buckets[index].hash;
 
-            () @nogc @trusted {debug(cachetools) tracef("test update index %d (%s) for key %s", index, _buckets[index], key);}();
+            debug(cachetools) safe_tracef("test update index %d (%s) for key %s", index, _buckets[index], key);
 
             if ( h <= DELETED_HASH ) // empty or deleted
             {
-                () @nogc @trusted {debug(cachetools) tracef("test update index %d (%s) for key %s - success", index, _buckets[index], key);}();
+                debug(cachetools) safe_tracef("test update index %d (%s) for key %s - success", index, _buckets[index], key);
                 return index;
             }
             assert((h & TYPE_MASK) == ALLOCATED_HASH);
             if ( (h & HASH_MASK) == computed_hash && keyEquals(_buckets[index].key, key) ) 
             {
-                () @nogc @trusted {debug(cachetools) tracef("test update index %d (%s) for key %s - success", index, _buckets[index], key);}();
+                debug(cachetools) safe_tracef("test update index %d (%s) for key %s - success", index, _buckets[index], key);
                 return index;
             }
             index = (index + 1) & _mask;
@@ -280,8 +263,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         do {
             immutable t = buckets[index].hash;
 
-            () @nogc @trusted {debug(cachetools) tracef("test empty index %d (%s)", 
-                index, buckets[index]);}();
+            debug(cachetools) safe_tracef("test empty index %d (%s)", index, buckets[index]);
             
             if ( t <= DELETED_HASH ) // empty or deleted
             {
@@ -317,10 +299,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
 
         // iterate over entries
 
-        debug(cachetools)
-        {
-            () @nogc {tracef("start resizing: old loadfactor: %s", (1.0*_allocated) / _buckets_num);}();
-        }
+        debug(cachetools) safe_tracef("start resizing: old loadfactor: %s", (1.0*_allocated) / _buckets_num);
 
         for(int i=0;i<_buckets_num;i++) {
             immutable hash_t h = _buckets[i].hash;
@@ -331,7 +310,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
             immutable hash_t start_index = h & _new_mask;
             immutable new_position = findEmptyIndexExtended(start_index, _new_buckets, _new_mask);
 
-            debug(cachetools) () @nogc {tracef("old hash: %0x, old pos: %d, new_pos: %d", h, i, new_position);}();
+            debug(cachetools) safe_tracef("old hash: %0x, old pos: %d, new_pos: %d", h, i, new_position);
 
             assert( new_position >= 0 );
             assert( _new_buckets[cast(hash_t)new_position].hash  == EMPTY_HASH );
@@ -349,10 +328,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         _deleted = 0;
         _empty = _buckets_num - _allocated;
 
-        debug(cachetools)
-        {
-            () @nogc {tracef("resizing done: new loadfactor: %s", (1.0*_allocated) / _buckets_num);}();
-        }
+        debug(cachetools) safe_tracef("resizing done: new loadfactor: %s", (1.0*_allocated) / _buckets_num);
     }
 
     ///
@@ -473,7 +449,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
             () @trusted {GC.addRange(_buckets.ptr, _buckets_num * _Bucket.sizeof);}();
         }
 
-        () @nogc @trusted {debug(cachetools) tracef("put k: %s, v: %s", k,v);}();
+        debug(cachetools) safe_tracef("put k: %s, v: %s", k,v);
 
         if ( tooHighLoad ) {
             doResize(grow_factor * _buckets_num);
@@ -487,7 +463,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         _Bucket* bucket = &_buckets[placement_index];
         immutable h = bucket.hash;
 
-        debug(cachetools) () @nogc @trusted {tracef("start_index: %d, placement_index: %d", start_index, placement_index);}();
+        debug(cachetools) safe_tracef("start_index: %d, placement_index: %d", start_index, placement_index);
 
         if ( h < ALLOCATED_HASH )
         {
@@ -496,7 +472,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         }
         static if ( inlineValues )
         {
-            debug(cachetools) () @nogc @trusted {tracef("place inline buckets[%d] '%s'='%s'", placement_index, k, v);}();
+            debug(cachetools) safe_tracef("place inline buckets[%d] '%s'='%s'", placement_index, k, v);
             bucket.value = v;
             static if ( is(V==StoredValueType) )
             {
@@ -509,7 +485,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         }
         else
         {
-            debug(cachetools) () @nogc @trusted {tracef("place with allocation buckets[%d] '%s'='%s'", placement_index, k, v);}();
+            debug(cachetools) safe_tracef("place with allocation buckets[%d] '%s'='%s'", placement_index, k, v);
             if ( (bucket.hash & TYPE_MASK) == ALLOCATED_HASH )
             {
                 // we just replace what we already allocated
@@ -535,7 +511,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         }
 
 
-        debug(cachetools) () @nogc @trusted {tracef("remove k: %s", k);}();
+        debug(cachetools) safe_tracef("remove k: %s", k);
 
         immutable computed_hash = hash_function(k) & HASH_MASK;
         immutable start_index = computed_hash & _mask;
@@ -744,7 +720,9 @@ struct HashMap(K, V, Allocator = Mallocator) {
 /// test immutable struct and class as Key type
 @safe unittest
 {
-    () @nogc
+    import std.experimental.logger;
+    globalLogLevel = LogLevel.info;
+    () @nogc nothrow
     {
         struct S
         {
@@ -785,6 +763,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
 }
 @safe unittest {
     // test class as key
+    import std.experimental.logger;
     globalLogLevel = LogLevel.info;
     class A {
         int v;
@@ -815,8 +794,9 @@ struct HashMap(K, V, Allocator = Mallocator) {
 }
 
 @safe unittest {
+    import std.experimental.logger;
     globalLogLevel = LogLevel.info;
-    () @nogc {
+    () @nogc nothrow {
         HashMap!(int, int) int2int;
         foreach(i; 0..15) {
             int2int.put(i,i);
@@ -830,7 +810,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         }
         assert(int2int.length() == 0);
     }();
-    () @nogc {
+    () @nogc nothrow {
         struct LargeStruct {
             ulong a;
             ulong b;
@@ -852,8 +832,9 @@ struct HashMap(K, V, Allocator = Mallocator) {
 }
 
 @safe unittest {
+    import std.experimental.logger;
     globalLogLevel = LogLevel.info;
-    () @nogc {
+    () @nogc nothrow {
         assert(SmallValueFootprint!int());
         assert(SmallValueFootprint!double());
         struct SmallStruct {
@@ -896,10 +877,11 @@ struct HashMap(K, V, Allocator = Mallocator) {
 }
 
 @safe unittest {
+    import std.experimental.logger;
     import std.experimental.allocator.gc_allocator;
     globalLogLevel = LogLevel.info;
     static int i;
-    () @safe @nogc {
+    () @safe @nogc nothrow {
         struct LargeStruct {
             ulong a;
             ulong b;
@@ -913,7 +895,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
     globalLogLevel = LogLevel.info;
 }
 
-@safe unittest
+@safe unittest /* not nothrow as opIndex may throw */
 {
     import std.typecons;
     alias K = Tuple!(int, int);
@@ -929,7 +911,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
     assert(h[k0] == v0);
 }
 
-@safe unittest
+@safe nothrow unittest
 {
     class c {
         int a;
@@ -941,7 +923,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         {
             return hash_function(a);
         }
-        bool opEquals(const c other) pure const @safe @nogc
+        bool opEquals(const c other) pure const nothrow @safe @nogc
         {
             return this is other || this.a == other.a;
         }
@@ -950,7 +932,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
     alias V = int;
     K k0 = new c(0);
     V v0 = 1;
-    () @nogc {
+    () @nogc nothrow {
         HashMap!(K,V) h;
         h.put(k0, v0);
         int *v = k0 in h;
@@ -964,7 +946,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
 
 /// Test if we can work with non-@nogc opEquals for class-key.
 /// opEquals anyway must be non-@system.
-@safe unittest
+@safe nothrow unittest
 {
     class c {
         int a;
@@ -978,7 +960,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
             return hash_function(a);
         }
 
-        bool opEquals(const c other) const pure @safe
+        bool opEquals(const c other) const pure nothrow @safe
         {
             auto _ = [1,2,3]; // this cause GC
             return this is other || this.a == other.a;
@@ -998,7 +980,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
 ///
 /// test byKey, byValue, byPair
 ///
-@safe unittest
+@safe nothrow unittest
 {
     import std.algorithm;
     import std.array;
@@ -1028,11 +1010,12 @@ struct HashMap(K, V, Allocator = Mallocator) {
 /// 
 /// compare equivalence to AA
 ///
-unittest {
+/* not @safe because of AA */ unittest {
     import std.random;
     import std.array;
     import std.algorithm;
     import std.stdio;
+    import std.experimental.logger;
 
     enum iterations = 400_000;
 
@@ -1062,6 +1045,7 @@ unittest {
     import std.array;
     import std.algorithm;
     import std.stdio;
+    import std.experimental.logger;
 
     enum iterations = 400_000;
 
@@ -1084,7 +1068,7 @@ unittest {
 ///
 /// test clear
 ///
-@safe @nogc unittest
+@safe @nogc nothrow unittest
 {
     // test clear
 
@@ -1101,7 +1085,7 @@ unittest {
 ///
 /// test getOrAdd with value
 ///
-@safe @nogc unittest
+@safe @nogc nothrow unittest
 {
     // test of nogc getOrAdd
 
@@ -1117,7 +1101,7 @@ unittest {
 ///
 /// test getOrAdd with callable
 ///
-@safe @nogc unittest
+@safe @nogc nothrow unittest
 {
     // test of nogc getOrAdd with lazy default value
 
@@ -1201,12 +1185,12 @@ unittest {
 ///
 /// test if we can handle some exotic value type
 ///
-@safe @nogc unittest
+@safe @nogc nothrow unittest
 {
     // test of nogc getOrAdd with lazy default value
     // corner case when V is callable
 
-    alias F = int function() @safe @nogc;
+    alias F = int function() @safe @nogc nothrow;
 
     F one = function()
     {
@@ -1240,7 +1224,7 @@ unittest {
 }
 
 // test get()
-@safe @nogc unittest
+@safe @nogc nothrow unittest
 {
     HashMap!(int, int) hashMap;
     int i = hashMap.get(1, 55);
