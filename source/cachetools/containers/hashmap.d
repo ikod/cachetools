@@ -68,6 +68,28 @@ private bool keyEquals(K)(const K a, const K b)
         return a == b;
     }
 }
+@safe nothrow unittest
+{
+    class C
+    {
+        int c;
+        this(int v)
+        {
+            c = v;
+        }
+        bool opEquals(const C other) const nothrow @safe
+        {
+            return c == other.c;
+        }
+    }
+    C a = new C(0);
+    C b = new C(1);
+    C c = a;
+    C d = new C(0);
+    assert(!keyEquals(a,b));
+    assert(keyEquals(a,c));
+    assert(keyEquals(a,d));
+}
 
 struct HashMap(K, V, Allocator = Mallocator) {
 
