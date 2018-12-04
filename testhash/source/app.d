@@ -815,10 +815,11 @@ void main()
 
     version(Posix)
     {
-        GC.collect();GC.minimize();
-        test = "emsi";
-        r = benchmark!(structkey_emsi)(trials);
-        writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+        // this test lead to crash under win and linux
+        // GC.collect();GC.minimize();
+        // test = "emsi";
+        // r = benchmark!(structkey_emsi)(trials);
+        // writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
     }
 
     writeln("\n", center(" Test inserts and lookups for int[class] ", 50, ' '));

@@ -2,7 +2,6 @@ module cachetools.cache;
 
 import std.typecons;
 import std.exception;
-import std.experimental.logger;
 import core.stdc.time;
 
 private import std.experimental.allocator;
@@ -17,13 +16,13 @@ private import cachetools.containers.lists;
 ///
 /// CacheLRU contains maximum `size` items
 /// Eviction policy:
-/// 1. evict TTL-ed entry (if TTL)
+/// 1. evict TTL-ed entry (if TTL enabled), otherwise
 /// 2. if oldest entry not expired - evict oldes accessed (LRU)
 ///
 /// User can be informed about evicted entries via cache event list.
 ///
 
-class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
+class CacheLRU(K, V, Allocator = Mallocator)
 {
     ///
     /// Implemented as HashMap and multi-dlist.
@@ -68,7 +67,7 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         uint    __ttl;                  // use TTL if __ttl > 0
         bool    __reportCacheEvents;    // will user read cache events?
     }
-    struct CacheEventRange
+    struct CacheEventRange(K,V)
     {
         SList!(CacheEvent!(K,V), Allocator) __events;
         this(ref SList!(CacheEvent!(K,V), Allocator) events)
@@ -94,9 +93,9 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         } 
     }
 
-    public Nullable!V get(K k) @safe
+    final Nullable!V get(K k) @safe
     {
-        debug(cachetools) tracef("get %s", k);
+        debug(cachetools) safe_tracef("get %s", k);
         auto store_ptr = k in __map;
         if ( !store_ptr )
         {
@@ -122,7 +121,7 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         return Nullable!V(store_ptr.value);
     }
 
-    public PutResult put(K k, V v) @safe
+    final PutResult put(K k, V v) @safe
     out
     {
         assert(__result != PutResult(PutResultFlag.None));
@@ -144,13 +143,13 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
                 {
                     // purge ttl-ed element
                     e = __elements.head(TimeIndex);
-                    debug(cachetools) tracef("purging ttled %s", *e);
+                    debug(cachetools) safe_tracef("purging ttled %s", *e);
                 }
                 else
                 {
                     // purge lru element
                     e = __elements.head(AccessIndex);
-                    debug(cachetools) tracef("purging lru %s", *e);
+                    debug(cachetools) safe_tracef("purging lru %s", *e);
                 }
                 assert(e !is null);
                 if ( __reportCacheEvents )
@@ -170,7 +169,7 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         else // update element
         {
             result = PutResultFlag.Replaced;
-            debug(cachetools) tracef("update %s", *store_ptr);
+            debug(cachetools) safe_tracef("update %s", *store_ptr);
             ListElementPtr e = store_ptr.list_element_ptr;
             e.ts = ts;
             __elements.move_to_tail(e, TimeIndex);
@@ -186,9 +185,9 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         return result;
     }
 
-    public bool remove(K k) @safe
+    final bool remove(K k) @safe
     {
-        debug(cachetools) tracef("remove from cache %s", k);
+        debug(cachetools) safe_tracef("remove from cache %s", k);
         auto map_ptr = k in __map;
         if ( !map_ptr ) // do nothing
         {
@@ -206,7 +205,7 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         return true;
     }
 
-    public void clear() @safe
+    final void clear() @safe
     {
         if ( __reportCacheEvents )
         {
@@ -220,40 +219,40 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         __elements.clear();
     }
 
-    public size_t length() pure nothrow const @safe @nogc
+    size_t length() pure nothrow const @safe @nogc
     {
         return __elements.length;
     }
 
-    public auto size(size_t s) pure nothrow @safe @nogc
+    auto size(size_t s) pure nothrow @safe @nogc
     {
         __size = s;
         return this;
     }
 
-    public size_t size() pure nothrow const @safe @nogc
+    size_t size() pure nothrow const @safe @nogc
     {
         return __size;
     }
 
-    public auto ttl(uint d) pure nothrow @safe @nogc
+    auto ttl(uint d) pure nothrow @safe @nogc
     {
         __ttl = d;
         return this;
     }
 
-    public uint ttl() pure nothrow const @safe @nogc
+    uint ttl() pure nothrow const @safe @nogc
     {
         return __ttl;
     }
-    public auto enableCacheEvents() pure nothrow @safe @nogc
+    auto enableCacheEvents() pure nothrow @safe @nogc
     {
         __reportCacheEvents = true;
         return this;
     }
-    public auto cacheEvents() @safe
+    final auto cacheEvents() @safe
     {
-        return CacheEventRange(__events);
+        return CacheEventRange!(K,V)(__events);
     }
 }
 
@@ -263,6 +262,7 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
     import std.datetime;
     import core.thread;
     import std.algorithm;
+    import std.experimental.logger;
     globalLogLevel = LogLevel.info;
     PutResult r;
 
@@ -351,6 +351,7 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
         }
         bool opEquals(const C other) pure const @safe
         {
+            auto i = [1,2];
             return s == other.s;
         }
     }
@@ -368,9 +369,15 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
 }
 
 ///
-@safe unittest
+@nogc nothrow unittest
 {
-    auto lru = new CacheLRU!(int, string);
+    import std.experimental.allocator.mallocator;
+
+    alias allocator = Mallocator.instance;
+    alias Cache = CacheLRU!(int, string);
+
+    auto lru = make!(Cache)(allocator);
+
     lru.size = 2048; // keep 2048 elements in cache
     lru.ttl = 60;    // set 60 seconds TTL for items in cache
 
@@ -379,15 +386,18 @@ class CacheLRU(K, V, Allocator = Mallocator) : Cache!(K, V)
     assert(v.isNull);   // no such item in cache
     v = lru.get(1);
     assert(v == "one"); // 1 is in cache
+    lru.remove(1);
 }
-@safe unittest
+@safe nothrow unittest
 {
-    import std.stdio;
     auto lru = new CacheLRU!(int, string);
-    lru.enableCacheEvents();
-    lru.put(1, "one");
-    lru.put(1, "next one");
-    assert(lru.get(1) == "next one");
-    auto events = lru.cacheEvents();
-    //writeln(events);
+    () @nogc {
+        lru.enableCacheEvents();
+        lru.put(1, "one");
+        lru.put(1, "next one");
+        assert(lru.get(1) == "next one");
+        auto events = lru.cacheEvents();
+        assert(events.length == 1);
+        lru.clear();
+    }();
 }

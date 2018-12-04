@@ -22,25 +22,27 @@ enum PutResultFlag
 }
 alias PutResult = BitFlags!PutResultFlag;
 
-// implements storage aspect of cache
-interface Cache(K, V) {
-
-    // get value from cache
-    Nullable!V get(K) @safe;
-
-    // put/update cache entry
-    PutResult put(K, V) @safe;
-
-    // remove key
-    bool  remove(K) @safe;
-    
-    // clear entire cache
-    void  clear() @safe;
-    
-    // # of elements
-    size_t length() const @safe;
-
-}
+// I failed to reach both goals: inheritance from interface and nogc/nothrow attribute neutrality
+// for Cache implementations. So I droped inheritance.
+//
+//interface Cache(K, V) {
+//
+//    // get value from cache
+//    Nullable!V get(K) @safe;
+//
+//    // put/update cache entry
+//    PutResult put(K, V) @safe;
+//
+//    // remove key
+//    bool  remove(K) @safe;
+//    
+//    // clear entire cache
+//    void  clear() @safe;
+//    
+//    // # of elements
+//    size_t length() const @safe;
+//
+//}
 
 enum EventType
 {

@@ -5,8 +5,11 @@
 
 This package contains some cache implementations (for example LRU cache) and underlying data structures.
 
-Why you may want to use it? Because it is `@safe`. It is also `@nogc` (inherited from your key/value types).
-And it is fast.
+Why you may want to use it? Because it is fast, `@safe`. It is also `@nogc` and `nothrow` (inherited from your key/value types).
+
+Limitations:
+* Cache implementations are not inherited from inerface or base class.
+This is because inheritance and attribute inference don't work together.
 
 ### LRU cache ###
 

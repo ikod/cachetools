@@ -21,3 +21,19 @@ template StoredType(T)
         alias StoredType = T;
     }
 }
+
+import std.experimental.logger;
+
+debug(cachetools) @safe @nogc nothrow
+{
+    void safe_tracef(A...)(string f, scope A args) @safe @nogc nothrow
+    {
+        debug (cachetools) try
+        {
+            () @trusted @nogc {tracef(f, args);}();
+        }
+        catch(Exception e)
+        {
+        }
+    }    
+}
