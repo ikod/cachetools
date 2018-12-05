@@ -89,6 +89,7 @@ private bool keyEquals(K)(const K a, const K b)
     assert(!keyEquals(a,b));
     assert(keyEquals(a,c));
     assert(keyEquals(a,d));
+    assert(keyEquals(1,1));
 }
 
 struct HashMap(K, V, Allocator = Mallocator) {

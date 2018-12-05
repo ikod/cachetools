@@ -4,7 +4,7 @@ import std.traits;
 
 ///
 /// For classes (and structs with toHash method) we use v.toHash() to compute hash.
-/// -------------------------------------------------------------------------------
+/// ===============================================================================
 /// toHash method CAN BE @nogc or not. HashMap 'nogc' properties is inherited from this method.
 /// toHash method MUST BE @safe or @trusted, as all HashMap code alredy safe.
 ///
