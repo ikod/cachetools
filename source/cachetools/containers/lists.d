@@ -203,6 +203,7 @@ struct MultiDList(T, int N, Allocator = Mallocator)
 
 struct DList(T, Allocator = Mallocator) {
     this(this) @disable;
+
     struct Node(T) {
         T payload;
         private Node!T* prev;
@@ -214,6 +215,10 @@ struct DList(T, Allocator = Mallocator) {
         Node!T* _head;
         Node!T* _tail;
         ulong   _length;
+        
+        Node!T* _freelist;
+        uint    _freelist_len;
+        enum    _freelist_len_max = 100;
     }
 
     invariant {
@@ -226,10 +231,39 @@ struct DList(T, Allocator = Mallocator) {
         );
     }
 
+    ~this()
+    {
+        clear();
+    }
     ulong length() const pure nothrow @safe @nogc {
         return _length;
     }
 
+    void move_to_feelist(Node!T* n) @safe
+    {
+        if ( _freelist_len < _freelist_len_max )
+        {
+            n.next = _freelist;
+            _freelist = n;
+            ++_freelist_len;
+        }
+        else
+        {
+            (() @trusted {dispose(allocator, n);})();
+        }
+    }
+    Node!T* peek_from_freelist() @safe
+    {
+        if ( _freelist_len )
+        {
+            _freelist_len--;
+            auto r = _freelist;
+            _freelist = r.next;
+            r.next = r.prev = null;
+            return r;
+        }
+        return null;
+    }
     Node!T* insert_last(T v) @safe nothrow
     out
     {
@@ -238,8 +272,16 @@ struct DList(T, Allocator = Mallocator) {
     }
     do
     {
-        auto n = make!(Node!T)(allocator);
-        n.payload = v;
+        Node!T* n;
+        if ( _freelist_len == 0)
+        {
+            n = make!(Node!T)(allocator, v);
+        }
+        else
+        {
+            n = peek_from_freelist();
+            n.payload = v;
+        }
         if ( _head is null ) {
             _head = n;
         }
@@ -262,8 +304,16 @@ struct DList(T, Allocator = Mallocator) {
     }
     do 
     {
-        auto n = make!(Node!T)(allocator);
-        n.payload = v;
+        Node!T* n;
+        if ( _freelist_len == 0)
+        {
+            n = make!(Node!T)(allocator, v);
+        }
+        else
+        {
+            n = peek_from_freelist();
+            n.payload = v;
+        }
         if ( _tail is null ) {
             _tail = n;
         }
@@ -275,6 +325,33 @@ struct DList(T, Allocator = Mallocator) {
         _head = n;
         _length++;
         return n;
+    }
+    void clear() @safe
+    {
+        Node!T* n = _head, next;
+        while(n)
+        {
+            next = n.next;
+            (() @trusted {dispose(allocator, n);})();
+        }
+        n = _freelist;
+        while(n)
+        {
+            next = n.next;
+            (() @trusted {dispose(allocator, n);})();
+            n = next;
+        }
+        _length = 0;
+        _freelist_len = 0;
+        _head = _tail = _freelist = null;
+    }
+    bool popFront() @safe
+    {
+        if ( _length == 0 )
+        {
+            return false;
+        }
+        return remove(_head);
     }
 
     bool remove(Node!T* n) @safe @nogc
@@ -292,8 +369,8 @@ struct DList(T, Allocator = Mallocator) {
         if ( n == _head ) {
             _head = n.next;
         }
-        (() @trusted {dispose(allocator, n);})();
         _length--;
+        move_to_feelist(n);
         return true;
     }
 
@@ -397,13 +474,18 @@ struct SList(T, Allocator = Mallocator) {
         ulong _length;
         _Node!T *_first;
         _Node!T *_last;
+        
+        _Node!T* _freelist;
+        uint     _freelist_len;
+        enum     _freelist_len_max = 100;
     }
 
     invariant {
         assert
         ( 
             ( _length > 0 && _first !is null && _last !is null) ||
-            ( _length == 0 && _first is null && _last is null)
+            ( _length == 0 && _first is null && _last is null),
+            "length: %d, first: %s, last: %s".format(_length, _first, _last)
         );
     }
     ~this()
@@ -426,17 +508,43 @@ struct SList(T, Allocator = Mallocator) {
         return _last.v;
     }
 
+    private void move_to_feelist(_Node!T* n) @safe
+    {
+        if ( _freelist_len < _freelist_len_max )
+        {
+            n._next = _freelist;
+            _freelist = n;
+            ++_freelist_len;
+        }
+        else
+        {
+            (() @trusted {dispose(allocator, n);})();
+        }
+    }
+    private _Node!T* peek_from_freelist() @safe
+    {
+        if ( _freelist_len )
+        {
+            _freelist_len--;
+            auto r = _freelist;
+            _freelist = r._next;
+            r._next = null;
+            return r;
+        }
+        return null;
+    }
+
     T popFront() @nogc @safe nothrow
     in { assert(_first !is null); }
     do {
         T v = _first.v;
         auto next = _first._next;
-        (() @trusted {dispose(allocator, _first);})();
+        _length--;
+        move_to_feelist(_first);
         _first = next;
         if ( _first is null ) {
             _last = null;
         }
-        _length--;
         return v;
     }
     void clear() @nogc @safe {
@@ -446,6 +554,15 @@ struct SList(T, Allocator = Mallocator) {
             (() @trusted {dispose(allocator, n);})();
             n = next;
         }
+        n = _freelist;
+        while( n !is null ) {
+            auto next = n._next;
+            (() @trusted {dispose(allocator, n);})();
+            n = next;
+        }
+        _length = 0;
+        _freelist_len = 0;
+        _first = _last = null;
     }
     private struct Range(T) {
         private {
@@ -469,7 +586,16 @@ struct SList(T, Allocator = Mallocator) {
     void insertFront(T v) @safe nothrow
     out{ assert(_first !is null && _last !is null);}
     do {
-        auto n = make!(_Node!T)(allocator, v);
+        _Node!T* n;
+        if ( _freelist_len == 0)
+        {
+            n = make!(_Node!T)(allocator, v);
+        }
+        else
+        {
+            n = peek_from_freelist();
+            n.v = v;
+        }
         if ( _first !is null ) {
             n._next = _first;
         }
@@ -483,7 +609,16 @@ struct SList(T, Allocator = Mallocator) {
     void insertBack(T v) @safe nothrow
     out{ assert(_first !is null && _last !is null);}
     do {
-        auto n = make!(_Node!T)(allocator, v);
+        _Node!T* n;
+        if ( _freelist_len == 0)
+        {
+            n = make!(_Node!T)(allocator, v);
+        }
+        else
+        {
+            n = peek_from_freelist();
+            n.v = v;
+        }
         if ( _last !is null ) {
             _last._next = n;
         } else {

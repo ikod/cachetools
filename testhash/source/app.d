@@ -68,6 +68,7 @@ void f_oahashmap() @safe {
     }
     gcstop = () @trusted {return GC.stats;} ();
 }
+
 void f_oahashmapGC() @safe {
     gcstart = () @trusted {return GC.stats;}();
 
@@ -106,6 +107,42 @@ void f_hashmap() {
             hits++;
         }
     }
+    gcstop = () @trusted {return GC.stats;} ();
+}
+
+
+void f_aahashmapscan() @safe {
+    gcstart = () @trusted {return GC.stats;}();
+
+    int[int] c;
+
+    foreach(k;0..10)
+        foreach(i;0..iterations) {
+            c[i]= i;
+            c.remove(i-50000);
+            if ( randw[i] in c)
+            {
+                ++hits;
+            }
+        }
+
+    gcstop = () @trusted {return GC.stats;} ();
+}
+void f_oahashmapscan() @safe {
+    gcstart = () @trusted {return GC.stats;}();
+
+    CTHashMap!(int, int) c;
+
+    foreach(k;0..10)
+        foreach(i;0..iterations) {
+            c.put(i, i);
+            c.remove(i-50000);
+            if ( randw[i] in c)
+            {
+                ++hits;
+            }
+        }
+
     gcstop = () @trusted {return GC.stats;} ();
 }
 
@@ -168,6 +205,7 @@ void f_oahashmap_remove() @safe {
     }
     gcstop = () @trusted {return GC.stats;} ();
 }
+
 void f_hashmap_remove() {
     gcstart = () @trusted {return GC.stats;}();
 
@@ -556,6 +594,7 @@ void classkey_OAGC() @safe
 //    gcstop = () @trusted {return GC.stats;}();
 //}
 
+
 void test_dlist_std()
 {
     import std.container.dlist;
@@ -564,6 +603,26 @@ void test_dlist_std()
     foreach(i; randw)
     {
         intList.insertBack(i);
+        if (i < iterations/10)
+        {
+            intList.removeFront();
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+
+void test_slist_std()
+{
+    import std.container.slist;
+    gcstart = () @trusted {return GC.stats;}();
+    auto intList = new SList!int;
+    foreach(i; randw)
+    {
+        intList.insertFront(i);
+        if (i < iterations/10)
+        {
+            intList.removeFront();
+        }
     }
     gcstop = () @trusted {return GC.stats;}();
 }
@@ -576,6 +635,25 @@ void test_dlist_cachetools() @safe
     foreach(i; randw)
     {
         intList.insert_last(i);
+        if (i < iterations/10)
+        {
+            intList.popFront();
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+void test_slist_cachetools() @safe
+{
+    import cachetools.containers.lists;
+    gcstart = () @trusted {return GC.stats;}();
+    SList!int intList;
+    foreach(i; randw)
+    {
+        intList.insertFront(i);
+        if (i < iterations/10)
+        {
+            intList.popFront();
+        }
     }
     gcstop = () @trusted {return GC.stats;}();
 }
@@ -588,6 +666,25 @@ void test_dlist_cachetools_GC() @safe
     foreach(i; randw)
     {
         intList.insert_last(i);
+        if (i < iterations/10)
+        {
+            intList.popFront();
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+void test_slist_cachetools_GC() @safe
+{
+    import cachetools.containers.lists;
+    gcstart = () @trusted {return GC.stats;}();
+    SList!(int, GCAllocator) intList;
+    foreach(i; randw)
+    {
+        intList.insertFront(i);
+        if (i < iterations/10)
+        {
+            intList.popFront();
+        }
     }
     gcstop = () @trusted {return GC.stats;}();
 }
@@ -600,9 +697,29 @@ void test_dlist_emsi()
     foreach(i; randw)
     {
         intList.insertBack(i);
+        if (i < iterations/10)
+        {
+            intList.popFront();
+        }
     }
     gcstop = () @trusted {return GC.stats;}();
 }
+void test_slist_emsi()
+{
+    import containers.slist: SList;
+    gcstart = () @trusted {return GC.stats;}();
+    SList!int intList;
+    foreach(i; randw)
+    {
+        intList.insertFront(i);
+        if (i < iterations/10)
+        {
+            intList.popFront();
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+
 // --
 void test_dlist_std_LARGE()
 {
@@ -612,6 +729,10 @@ void test_dlist_std_LARGE()
     foreach(i; randw)
     {
         list.insertBack(LARGE(i));
+        if (i < iterations/10)
+        {
+            list.removeFront();
+        }
     }
     gcstop = () @trusted {return GC.stats;}();
 }
@@ -624,6 +745,10 @@ void test_dlist_cachetools_LARGE() @safe
     foreach(i; randw)
     {
         list.insert_last(LARGE(i));
+        if (i < iterations/10)
+        {
+            list.popFront();
+        }
     }
     gcstop = () @trusted {return GC.stats;}();
 }
@@ -636,6 +761,10 @@ void test_dlist_cachetools_LARGE_GC() @safe
     foreach(i; randw)
     {
         list.insert_last(LARGE(i));
+        if (i < iterations/10)
+        {
+            list.popFront();
+        }
     }
     gcstop = () @trusted {return GC.stats;}();
 }
@@ -648,6 +777,10 @@ void test_dlist_emsi_LARGE()
     foreach(i; randw)
     {
         list.insertBack(LARGE(i));
+        if (i < iterations/10)
+        {
+            list.popFront();
+        }
     }
     gcstop = () @trusted {return GC.stats;}();
 }
@@ -712,7 +845,7 @@ void main()
     import std.string;
     string test;
     Duration[1] r;
-    string fmt = "|%-7.7s | %-31.31s | GC memory Δ %dMB|";
+    string fmt = "|%-9.9s | %-31.31s | GC memory Δ %dMB|";
 
     writeln("\n", center(" Test inserts and lookups int[int] ", 50, ' '));
     writeln(      center(" ================================= ", 50, ' '));
@@ -741,6 +874,20 @@ void main()
         writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
     }
 
+    writeln("\n", center(" Test scan ", 50, ' '));
+    writeln(      center(" ========= ", 50, ' '));
+
+    GC.collect();GC.minimize();
+    test = "std";
+    r = benchmark!(f_aahashmapscan)(trials);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "c.t.";
+    r = benchmark!(f_oahashmapscan)(trials);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    
+    
     writeln("\n", center(" Test insert, remove, lookup for int[int]", 50, ' '));
     writeln(      center(" ======================================= ", 50, ' '));
 
@@ -896,9 +1043,34 @@ void main()
     writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
-    test = "emsi";
-    r = benchmark!(test_dlist_cachetools)(trials);
+    test = "emsiunroll";
+    r = benchmark!(test_dlist_emsi)(trials);
     writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+
+    writeln("\n", center(" Test single-linked list SList!int ", 50, ' '));
+    writeln(      center(" ================================= ", 50, ' '));
+
+    GC.collect();GC.minimize();
+    test = "std";
+    r = benchmark!(test_slist_std)(trials);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "c.t.";
+    r = benchmark!(test_slist_cachetools)(trials);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "c.t.+GC";
+    r = benchmark!(test_slist_cachetools_GC)(trials);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "emsi";
+    r = benchmark!(test_slist_emsi)(trials);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
 
     writeln("\n", center(" Test double-linked list of structs ", 50, ' '));
     writeln(      center(" ================================== ", 50, ' '));
