@@ -243,7 +243,7 @@ struct ChainedHashMap(K, V, Allocator = Mallocator)
         _buckets = _new_buckets;
         _buckets_num = _new_buckets_num;
         _mask = _new_mask;
-        assert(_popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
+        assert(popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
 
         debug(cachetools) safe_tracef("resizing done: new loadfactor: %s", (1.0*_allocated) / _buckets_num);
 
@@ -257,7 +257,7 @@ struct ChainedHashMap(K, V, Allocator = Mallocator)
     do {
         if ( !_buckets_num ) {
             _buckets_num = initial_buckets_num;
-            assert(_popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
+            assert(popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
             _mask = _buckets_num - 1;
             _buckets = makeArray!(_Bucket)(allocator, _buckets_num);
             () @trusted {
@@ -851,7 +851,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         })();
         _buckets = _new_buckets;
         _buckets_num = _new_buckets_num;
-        assert(_popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
+        assert(popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
         _mask = _buckets_num - 1;
         _deleted = 0;
         _empty = _buckets_num - _allocated;
@@ -971,7 +971,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
     do {
         if ( !_buckets_num ) {
             _buckets_num = _empty = initial_buckets_num;
-            assert(_popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
+            assert(popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
             _mask = _buckets_num - 1;
             _buckets = makeArray!(_Bucket)(allocator, _buckets_num);
             () @trusted {GC.addRange(_buckets.ptr, _buckets_num * _Bucket.sizeof);}();
@@ -1715,7 +1715,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
     import std.experimental.logger;
     import std.meta;
 
-    globalLogLevel = LogLevel.trace;
+    globalLogLevel = LogLevel.info;
     class C {
         string v;
         this(int _v) @safe

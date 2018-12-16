@@ -689,6 +689,22 @@ void test_slist_cachetools_GC() @safe
     gcstop = () @trusted {return GC.stats;}();
 }
 
+void test_clist_cachetools() @safe
+{
+    import cachetools.containers.lists;
+    gcstart = () @trusted {return GC.stats;}();
+    CompressedList!int intList;
+    foreach(i; randw)
+    {
+        intList.insertFront(i);
+        if (i < iterations/10)
+        {
+            intList.popFront();
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+
 void test_dlist_emsi()
 {
     import containers.unrolledlist;
@@ -1059,6 +1075,11 @@ void main()
     GC.collect();GC.minimize();
     test = "c.t.";
     r = benchmark!(test_slist_cachetools)(trials);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "c.t.comp";
+    r = benchmark!(test_clist_cachetools)(trials);
     writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
