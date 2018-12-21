@@ -1,3 +1,4 @@
+///
 module cachetools.containers.hashmap;
 
 import std.traits;
@@ -110,7 +111,7 @@ private bool keyEquals(K)(const K a, const K b)
     assert(keyEquals(1,1));
 }
 
-struct ChainedHashMap(K, V, Allocator = Mallocator)
+package struct ChainedHashMap(K, V, Allocator = Mallocator)
 {
     enum initial_buckets_num = 32;
     enum grow_factor = 2;
