@@ -12,12 +12,15 @@ import containers.hashmap;
 import cachetools.containers.hashmap: CTHashMap = HashMap;
 import cachetools.cache: CacheLRUCT = CacheLRU;
 import cachetools.hash: hash_function;
+import cachetools.containers.lists;
 
 immutable iterations = 1_000_000;
 immutable trials = 1;
 int hits;
 
 int[iterations] randw, randr;
+CompressedList!(string) words;
+
 static this()
 {
     auto rnd = Random(unpredictableSeed);
@@ -26,6 +29,12 @@ static this()
         randw[i] = uniform(0, iterations, rnd);
         randr[i] = uniform(0, iterations, rnd);
     }
+    auto f = File("t8.shakespeare.txt", "r");
+    foreach(word; f.byLine.map!splitter.joiner) {
+        words.insertBack(word.idup);
+    }
+    f.close();
+    //writeln(words.range());
 }
 
 GC.Stats gcstart, gcstop;
@@ -232,17 +241,15 @@ void shakespeare_std()
     gcstart = () @trusted {return GC.stats;} ();
 
     int[string] count;
-    void updateCount(char[] word) {
-        auto ptr = cast(string)word in count;
+    void updateCount(string word) {
+        auto ptr = word in count;
         if (!ptr)
-            count[word.idup] = 1;
+            count[word] = 1;
         else
             (*ptr)++;
     }
-
-    auto f = File("t8.shakespeare.txt", "r");
-    foreach(word; f.byLine.map!splitter.joiner) {
-          updateCount(word);
+    foreach(word; words.range()) {
+        updateCount(word);
     }
     gcstop = () @trusted {return GC.stats;} ();
 }
@@ -251,59 +258,82 @@ void shakespeare_OAHashMap()
     gcstart = () @trusted {return GC.stats;} ();
 
     CTHashMap!(string, int) count;
-    void updateCount(char[] word) {
-        auto ptr = cast(string)word in count;
-        if (!ptr)
-            count.put(word.idup, 1);
-        else
-            (*ptr)++;
+
+    void updateCount(string word) {
+        count.getOrAdd(word, 0)++;
     }
 
-    auto f = File("t8.shakespeare.txt", "r");
-    foreach(word; f.byLine.map!splitter.joiner) {
+    foreach(word; words.range()) {
           updateCount(word);
     }
     gcstop = () @trusted {return GC.stats;} ();
 }
+
 void shakespeare_OAHashMapGC()
 {
     gcstart = () @trusted {return GC.stats;} ();
 
     CTHashMap!(string, int, GCAllocator) count;
-    void updateCount(char[] word) {
-        auto ptr = cast(string)word in count;
-        if (!ptr)
-            count.put(word.idup, 1);
-        else
-            (*ptr)++;
+
+    void updateCount(string word) {
+        count.getOrAdd(word, 0)++;
     }
 
-    auto f = File("t8.shakespeare.txt", "r");
-    foreach(word; f.byLine.map!splitter.joiner) {
+    foreach(word; words.range()) {
           updateCount(word);
     }
     gcstop = () @trusted {return GC.stats;} ();
 }
+
 void shakespeare_HashMap()
 {
     gcstart = () @trusted {return GC.stats;} ();
 
     HashMap!(string, int) count;
-    void updateCount(char[] word) {
-        auto ptr = cast(string)word in count;
+
+    void updateCount(string word) {
+        auto ptr = word in count;
         if (!ptr)
-            count[word.idup] = 1;
+            count[word] = 1;
         else
             (*ptr)++;
     }
 
-    auto f = File("t8.shakespeare.txt", "r");
-    foreach(word; f.byLine.map!splitter.joiner) {
+    foreach(word; words.range()) {
           updateCount(word);
     }
     gcstop = () @trusted {return GC.stats;} ();
 }
 
+void test_integrity()
+{
+    int[string] stdcount;
+    void updateStdCount(string word) {
+        auto ptr = word in stdcount;
+        if (!ptr)
+            stdcount[word] = 1;
+        else
+            (*ptr)++;
+    }
+    foreach(word; words.range()) {
+        updateStdCount(word);
+    }
+
+    CTHashMap!(string, int) mycount;
+
+    void updateMyCount(string word) {
+        mycount.getOrAdd(word, 0)++;
+    }
+
+    foreach(word; words.range()) {
+        updateMyCount(word);
+    }
+    assert(stdcount.length == mycount.length);
+    foreach(pair; mycount.byPair)
+    {
+        assert(pair.value == stdcount[pair.key]);
+    }
+}
 struct LARGE {
     import std.conv;
     int i;
@@ -705,6 +735,22 @@ void test_clist_cachetools() @safe
     gcstop = () @trusted {return GC.stats;}();
 }
 
+void test_clist_cachetoolsGC() @safe
+{
+    import cachetools.containers.lists;
+    gcstart = () @trusted {return GC.stats;}();
+    CompressedList!(int, GCAllocator) intList;
+    foreach(i; randw)
+    {
+        intList.insertFront(i);
+        if (i < iterations/10)
+        {
+            intList.popFront();
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+
 void test_dlist_emsi()
 {
     import containers.unrolledlist;
@@ -777,6 +823,38 @@ void test_dlist_cachetools_LARGE_GC() @safe
     foreach(i; randw)
     {
         list.insert_last(LARGE(i));
+        if (i < iterations/10)
+        {
+            list.popFront();
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+
+void test_clist_cachetools_LARGE() @safe
+{
+    import cachetools.containers.lists;
+    gcstart = () @trusted {return GC.stats;}();
+    CompressedList!(LARGE) list;
+    foreach(i; randw)
+    {
+        list.insertBack(LARGE(i));
+        if (i < iterations/10)
+        {
+            list.popFront();
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+
+void test_clist_cachetools_LARGE_GC() @safe
+{
+    import cachetools.containers.lists;
+    gcstart = () @trusted {return GC.stats;}();
+    CompressedList!(LARGE, GCAllocator) list;
+    foreach(i; randw)
+    {
+        list.insertBack(LARGE(i));
         if (i < iterations/10)
         {
             list.popFront();
@@ -859,9 +937,11 @@ void main()
 {
 
     import std.string;
+    import std.experimental.logger;
+    globalLogLevel = LogLevel.info;
     string test;
     Duration[1] r;
-    string fmt = "|%-9.9s | %-31.31s | GC memory Δ %dMB|";
+    string fmt = "|%-11.11s | %-31.31s | GC memory Δ %dMB|";
 
     writeln("\n", center(" Test inserts and lookups int[int] ", 50, ' '));
     writeln(      center(" ================================= ", 50, ' '));
@@ -1040,6 +1120,12 @@ void main()
         writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
     }
 
+    GC.collect();GC.minimize();
+    test = "correctness";
+    r = benchmark!test_integrity(1);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+
     writeln("\n", center(" Test double-linked list DList!int ", 50, ' '));
     writeln(      center(" ================================= ", 50, ' '));
 
@@ -1059,6 +1145,16 @@ void main()
     writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
+    test = "c.t.unroll";
+    r = benchmark!(test_clist_cachetools)(trials);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "c.t.unr+GC";
+    r = benchmark!(test_clist_cachetoolsGC)(trials);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
     test = "emsiunroll";
     r = benchmark!(test_dlist_emsi)(trials);
     writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
@@ -1075,11 +1171,6 @@ void main()
     GC.collect();GC.minimize();
     test = "c.t.";
     r = benchmark!(test_slist_cachetools)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
-
-    GC.collect();GC.minimize();
-    test = "c.t.comp";
-    r = benchmark!(test_clist_cachetools)(trials);
     writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
@@ -1109,6 +1200,16 @@ void main()
     GC.collect();GC.minimize();
     test = "c.t.+GC";
     r = benchmark!(test_dlist_cachetools_LARGE_GC)(trials);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "c.t.unr";
+    r = benchmark!(test_clist_cachetools_LARGE)(trials);
+    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "c.t.unr+GC";
+    r = benchmark!(test_clist_cachetools_LARGE_GC)(trials);
     writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
