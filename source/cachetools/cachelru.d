@@ -1,3 +1,4 @@
+///
 module cachetools.cachelru;
 
 import std.typecons;
@@ -17,29 +18,29 @@ private import cachetools.containers.lists;
 /// CacheLRU contains maximum `size` items
 /// Eviction policy:
 /// 1. evict TTL-ed entry (if TTL enabled), otherwise
-/// 2. if oldest entry not expired - evict oldes accessed (LRU)
+/// 2. if oldest entry not expired - evict oldest accessed (LRU)
 ///
 /// User can be informed about evicted entries via cache event list.
+///
+///
+/// Implemented as HashMap and multi-dlist.
+///
+/// $(B HashMap) keeps $(OL
+///  $(LI cached value.)
+///  $(LI pointer to dlist element.)
+///  $(LI creation time (to check expiration and purge expired entry on get() without access to dlist).)
+/// )
+///
+/// $(B dlist) keep key, creation timestamp (to check expiration) $(OL
+///  $(LI key, so that we can remove entries from hashmap for lists heads (AccessIndex and TimeIndex))
+///  $(LI creation time, so that we can check expiration for 'TimeIndex')
+/// )
+/// Each element in dlist have two sets of double-links - first set create order by access time, second set
+/// for creation time.
 ///
 
 class CacheLRU(K, V, Allocator = Mallocator)
 {
-    ///
-    /// Implemented as HashMap and multi-dlist.
-    ///
-    /// HashMap (by key) keep 
-    ///  1. cached value
-    ///  2. pointer to dlist element.
-    ///  3. creation time (to check expiration and purge expired entry on get() without access to dlist)
-    ///  4. hits counter
-    ///
-    /// dlist keep key, cteation timestamp (to check expiration)
-    ///  1. key, so that we can remove entries from hashmap for lists heads (AccessIndex and TimeIndex)
-    ///  2. creation time, so that we can check expiration for 'TimeIndex'
-    ///
-    /// Each element in dlist have two sets of double-links - first set create order by access time, second set
-    /// for creation time.
-    ///
     private
     {
         enum size_t AccessIndex = 0;
@@ -70,20 +71,24 @@ class CacheLRU(K, V, Allocator = Mallocator)
     struct CacheEventRange(K,V)
     {
         SList!(CacheEvent!(K,V), Allocator) __events;
-        this(ref SList!(CacheEvent!(K,V), Allocator) events)
+        void opAssign(CacheEventRange!(K, V) other) @safe
+        {
+            __events = other.__events;
+        }
+        this(ref SList!(CacheEvent!(K,V), Allocator) events) @safe
         {
             import std.algorithm.mutation: swap;
             swap(__events, events);
         }
-        bool empty() const nothrow pure
+        bool empty() @safe const nothrow pure
         {
             return __events.empty();
         }
-        void popFront() pure nothrow
+        void popFront() @safe nothrow
         {
             __events.popFront();
         }
-        auto front()
+        auto front() @safe
         {
             return __events.front();
         }
@@ -93,6 +98,7 @@ class CacheLRU(K, V, Allocator = Mallocator)
         } 
     }
 
+    ///
     final Nullable!V get(K k) @safe
     {
         debug(cachetools) safe_tracef("get %s", k);
@@ -120,7 +126,7 @@ class CacheLRU(K, V, Allocator = Mallocator)
         __elements.move_to_tail(order_p, AccessIndex);
         return Nullable!V(store_ptr.value);
     }
-
+    ///
     final PutResult put(K k, V v) @safe
     out
     {
@@ -185,6 +191,7 @@ class CacheLRU(K, V, Allocator = Mallocator)
         return result;
     }
 
+    ///
     final bool remove(K k) @safe
     {
         debug(cachetools) safe_tracef("remove from cache %s", k);
@@ -205,6 +212,7 @@ class CacheLRU(K, V, Allocator = Mallocator)
         return true;
     }
 
+    ///
     final void clear() @safe
     {
         if ( __reportCacheEvents )
@@ -230,6 +238,7 @@ class CacheLRU(K, V, Allocator = Mallocator)
         return this;
     }
 
+    ///
     size_t size() pure nothrow const @safe @nogc
     {
         return __size;
@@ -241,19 +250,60 @@ class CacheLRU(K, V, Allocator = Mallocator)
         return this;
     }
 
+    ///
     uint ttl() pure nothrow const @safe @nogc
     {
         return __ttl;
     }
+    ///
     auto enableCacheEvents() pure nothrow @safe @nogc
     {
         __reportCacheEvents = true;
         return this;
     }
-    final auto cacheEvents() @safe
+    ///
+    final auto cacheEvents() @safe nothrow
     {
         return CacheEventRange!(K,V)(__events);
     }
+}
+
+///
+unittest
+{
+    import core.thread;
+
+    // very basic example
+    auto lru = new CacheLRU!(int, string);
+
+    lru.size(4).ttl(1);
+    assert(lru.size == 4);
+    assert(lru.ttl == 1);
+
+    assert(lru.length == 0);
+    lru.put(1, "one");
+    lru.put(2, "two");
+    lru.put(3, "three");
+    lru.put(4, "four");
+
+    auto v = lru.get(2);
+    assert(v=="two");
+    v = lru.get(4);
+    assert(v=="four");
+
+    assert(lru.length == 4);
+    // As we reached cache capacity, next `put` must evict oldest never accessed key '1'
+    lru.put(5, "five");
+    assert(lru.length == 4);    // length did not changed
+    assert(lru.get(1).isNull);  // really evicted
+
+    Thread.sleep(2.seconds);
+    v = lru.get(2); // it must be expired by ttl
+    assert(v.isNull);
+    assert(lru.length == 3);
+    v = lru.get(3); // it must be expired by ttl too
+    assert(v.isNull);
+    assert(lru.length == 2);
 }
 
 @safe unittest
@@ -369,7 +419,6 @@ class CacheLRU(K, V, Allocator = Mallocator)
     assert(s11v is s1v);
 }
 
-///
 @nogc nothrow unittest
 {
     import std.experimental.allocator.mallocator;
@@ -389,16 +438,22 @@ class CacheLRU(K, V, Allocator = Mallocator)
     assert(v == "one"); // 1 is in cache
     lru.remove(1);
 }
+
+///
 @safe nothrow unittest
 {
     auto lru = new CacheLRU!(int, string);
-    () @nogc {
+    () @nogc @safe nothrow {
         lru.enableCacheEvents();
         lru.put(1, "one");
+        assert(lru.get(1) == "one");
         lru.put(1, "next one");
         assert(lru.get(1) == "next one");
         auto events = lru.cacheEvents();
-        assert(events.length == 1);
+        assert(events.length == 1); // replaced old value
+        lru.put(2, "two");
         lru.clear();
+        events = lru.cacheEvents();
+        assert(events.length == 2); // removed keys 1 and 2 during clear()
     }();
 }
