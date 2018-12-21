@@ -1,7 +1,11 @@
+///
 module cachetools.containers.lists;
+
+private import core.memory;
 
 private import std.experimental.allocator;
 private import std.experimental.allocator.mallocator : Mallocator;
+private import std.experimental.allocator.gc_allocator;
 private import std.experimental.logger;
 private import std.format;
 
@@ -50,6 +54,13 @@ struct MultiDList(T, int N, Allocator = Mallocator)
     do
     {
         auto n = make!(Node)(allocator, v);
+        static if ( !is(Allocator == GCAllocator) )
+        {
+            () @trusted
+            {
+                GC.addRange(n, Node.sizeof);
+            }();
+        }
         static foreach(index;0..N) {
             if ( _heads[index] is null ) {
                 _heads[index] = n;
@@ -130,7 +141,13 @@ struct MultiDList(T, int N, Allocator = Mallocator)
                 _heads[i] = n.links[i].next;
             }
         }
-        (() @trusted {dispose(allocator, n);})();
+        () @trusted {
+            static if ( !is(Allocator == GCAllocator) )
+            {
+                GC.removeRange(n);
+            }
+            dispose(allocator, n);
+        }();
         _length--;
     }
     Node* tail(size_t i) pure nothrow @safe @nogc
@@ -223,6 +240,19 @@ struct DList(T, Allocator = Mallocator) {
         enum    _freelist_len_max = 100;
     }
 
+    private struct Range {
+        Node!T* _current;
+        T front() @safe {
+            return _current.payload;
+        }
+        void popFront() @safe {
+            _current = _current.next;
+        }
+        bool empty() @safe {
+            return _current is null;
+        }
+    }
+
     invariant {
         assert
         (
@@ -233,16 +263,19 @@ struct DList(T, Allocator = Mallocator) {
         );
     }
 
-    ~this()
-    {
+    ~this() {
         clear();
     }
+
+    Range range() @safe {
+        return Range(_head);
+    }
+
     ulong length() const pure nothrow @safe @nogc {
         return _length;
     }
 
-    void move_to_feelist(Node!T* n) @safe
-    {
+    void move_to_feelist(Node!T* n) @safe {
         if ( _freelist_len < _freelist_len_max )
         {
             n.next = _freelist;
@@ -251,11 +284,16 @@ struct DList(T, Allocator = Mallocator) {
         }
         else
         {
-            (() @trusted {dispose(allocator, n);})();
+            () @trusted {
+                static if ( !is(Allocator == GCAllocator) ) {
+                    GC.removeRange(n);
+                }
+                dispose(allocator, n);
+            }();
         }
     }
-    Node!T* peek_from_freelist() @safe
-    {
+
+    Node!T* peek_from_freelist() @safe {
         if ( _freelist_len )
         {
             _freelist_len--;
@@ -266,18 +304,23 @@ struct DList(T, Allocator = Mallocator) {
         }
         return null;
     }
+
+    alias insertBack = insert_last;
     Node!T* insert_last(T v) @safe nothrow
-    out
-    {
+    out {
         assert(_length>0);
         assert(_head !is null && _tail !is null);
     }
-    do
-    {
+    do {
         Node!T* n;
         if ( _freelist_len == 0)
         {
             n = make!(Node!T)(allocator, v);
+            static if ( !is(Allocator == GCAllocator) ) {
+                () @trusted {
+                    GC.addRange(n, Node!T.sizeof);
+                }();
+            }
         }
         else
         {
@@ -299,17 +342,20 @@ struct DList(T, Allocator = Mallocator) {
 
     alias insertFront = insert_first;
     Node!T* insert_first(T v) @safe nothrow
-    out
-    {
+    out {
         assert(_length>0);
         assert(_head !is null && _tail !is null);
     }
-    do 
-    {
+    do {
         Node!T* n;
         if ( _freelist_len == 0)
         {
             n = make!(Node!T)(allocator, v);
+            static if ( !is(Allocator == GCAllocator) ) {
+                () @trusted {
+                    GC.addRange(n, Node!T.sizeof);
+                }();
+            }
         }
         else
         {
@@ -328,32 +374,50 @@ struct DList(T, Allocator = Mallocator) {
         _length++;
         return n;
     }
-    void clear() @safe
-    {
+
+    void clear() @safe {
         Node!T* n = _head, next;
         while(n)
         {
             next = n.next;
-            (() @trusted {dispose(allocator, n);})();
+            () @trusted {
+                static if ( !is(Allocator == GCAllocator) ) {
+                    GC.removeRange(n);
+                }
+                dispose(allocator, n);
+            }();
         }
         n = _freelist;
         while(n)
         {
             next = n.next;
-            (() @trusted {dispose(allocator, n);})();
+            () @trusted {
+                static if ( !is(Allocator == GCAllocator) ) {
+                    GC.removeRange(n);
+                }
+                dispose(allocator, n);
+            }();
             n = next;
         }
         _length = 0;
         _freelist_len = 0;
         _head = _tail = _freelist = null;
     }
-    bool popFront() @safe
-    {
+
+    bool popFront() @safe {
         if ( _length == 0 )
         {
             return false;
         }
         return remove(_head);
+    }
+
+    bool popBack() @safe {
+        if ( _length == 0 )
+        {
+            return false;
+        }
+        return remove(_tail);
     }
 
     bool remove(Node!T* n) @safe @nogc
@@ -377,16 +441,14 @@ struct DList(T, Allocator = Mallocator) {
     }
 
     void move_to_tail(Node!T* n) @safe @nogc
-    in
-    {
+    in {
         assert(_length > 0);
         assert(_head !is null && _tail !is null);
     }
     out {
         assert(_tail == n && n.next is null);
     }
-    do
-    {
+    do {
         if ( n == _tail ) {
             return;
         }
@@ -436,9 +498,54 @@ struct DList(T, Allocator = Mallocator) {
         //_tail = n;
     }
 
+    void move_to_head(Node!T* n) @safe @nogc
+    in {
+        assert(_length > 0);
+        assert(_head !is null && _tail !is null);
+    }
+    out {
+        assert(_head == n && n.prev is null);
+    }
+    do {
+        if ( n == _head ) {
+            return;
+        }
+        // unlink
+        if ( n.prev is null )
+        {
+            _head = n.next;
+        }
+        else
+        {
+            n.prev.next = n.next;
+        }
+        if ( n.next is null )
+        {
+            _tail = n.prev;
+        }
+        else
+        {
+            n.next.prev = n.prev;
+        }
+
+        // insert front
+        if ( _tail is null ) {
+            _tail = n;
+        }
+        n.next = _head;
+        if ( _head !is null )
+        {
+            _head.prev = n;
+        }
+        n.prev = null;
+        _head = n;
+
+    }
+
     Node!T* head() @safe @nogc nothrow {
         return _head;
     }
+
     Node!T* tail() @safe @nogc nothrow {
         return _tail;
     }
@@ -454,6 +561,13 @@ struct SList(T, Allocator = Mallocator) {
         {
             auto v = f.v;
             auto n = make!(_Node!T)(allocator, v);
+            static if (!is(Allocator == GCAllocator))
+            {
+                () @trusted
+                {
+                    GC.addRange(n, (_Node!T).sizeof);
+                }();
+            }
             if ( __newLast !is null ) {
                 __newLast._next = n;
             } else {
@@ -464,6 +578,40 @@ struct SList(T, Allocator = Mallocator) {
         }
         _first = __newFirst;
         _last = __newLast;
+    }
+
+    void opAssign(typeof(this) other) @safe
+    {
+        // copy items
+        _Node!T* __newFirst, __newLast;
+        auto f = other._first;
+        while(f)
+        {
+            auto v = f.v;
+            auto n = make!(_Node!T)(allocator, v);
+            static if (!is(Allocator == GCAllocator))
+            {
+                () @trusted
+                {
+                    GC.addRange(n, (_Node!T).sizeof);
+                }();
+            }
+            if ( __newLast !is null ) {
+                __newLast._next = n;
+            } else {
+                __newFirst = n;
+            }
+            __newLast = n;
+            f = f._next;
+        }
+        _first = __newFirst;
+        _last = __newLast;
+        _length = other._length;
+    }
+
+    ~this()
+    {
+        clear();
     }
 
     package {
@@ -483,17 +631,19 @@ struct SList(T, Allocator = Mallocator) {
     }
 
     invariant {
-        assert
-        ( 
-            ( _length > 0 && _first !is null && _last !is null) ||
-            ( _length == 0 && _first is null && _last is null),
-            "length: %d, first: %s, last: %s".format(_length, _first, _last)
-        );
+        try
+        {
+            assert (
+                ( _length > 0 && _first !is null && _last !is null) ||
+                ( _length == 0 && _first is null && _last is null),
+                "length: %d, first: %s, last: %s".format(_length, _first, _last)
+            );
+        }
+        catch(Exception e)
+        {
+        }
     }
-    ~this()
-    {
-        clear();
-    }
+
     ulong length() const pure @nogc @safe nothrow {
         return _length;
     }
@@ -520,7 +670,13 @@ struct SList(T, Allocator = Mallocator) {
         }
         else
         {
-            (() @trusted {dispose(allocator, n);})();
+            (() @trusted {
+                static if ( !is(Allocator == GCAllocator) )
+                {
+                    GC.removeRange(n);
+                }
+                dispose(allocator, n);
+            })();
         }
     }
     private _Node!T* peek_from_freelist() @safe
@@ -553,13 +709,25 @@ struct SList(T, Allocator = Mallocator) {
         _Node!T* n = _first;
         while( n !is null ) {
             auto next = n._next;
-            (() @trusted {dispose(allocator, n);})();
+            (() @trusted {
+                static if ( !is(Allocator == GCAllocator) )
+                {
+                    GC.removeRange(n);
+                }
+                dispose(allocator, n);
+            })();
             n = next;
         }
         n = _freelist;
         while( n !is null ) {
             auto next = n._next;
-            (() @trusted {dispose(allocator, n);})();
+            (() @trusted {
+                static if ( !is(Allocator == GCAllocator) )
+                {
+                    GC.removeRange(n);
+                }
+                dispose(allocator, n);
+            })();
             n = next;
         }
         _length = 0;
@@ -592,6 +760,13 @@ struct SList(T, Allocator = Mallocator) {
         if ( _freelist_len == 0)
         {
             n = make!(_Node!T)(allocator, v);
+            static if (!is(Allocator == GCAllocator))
+            {
+                () @trusted
+                {
+                    GC.addRange(n, (_Node!T).sizeof);
+                }();
+            }
         }
         else
         {
@@ -615,6 +790,13 @@ struct SList(T, Allocator = Mallocator) {
         if ( _freelist_len == 0)
         {
             n = make!(_Node!T)(allocator, v);
+            static if (!is(Allocator == GCAllocator))
+            {
+                () @trusted
+                {
+                    GC.addRange(n, (_Node!T).sizeof);
+                }();
+            }
         }
         else
         {
@@ -643,6 +825,10 @@ struct SList(T, Allocator = Mallocator) {
             // do remove
             _length--;
             removed = true;
+            static if ( !is(Allocator == GCAllocator) )
+            {
+                GC.removeRange(current);
+            }
             dispose(allocator, current);
             if ( prev is null ) {
                 _first = next;                    
@@ -745,9 +931,12 @@ struct SList(T, Allocator = Mallocator) {
     dlist.move_to_tail(n1);
     assert(dlist.head.payload == 2);
     assert(dlist.tail.payload == 1);
+    dlist.move_to_head(n1);
+    assert(dlist.head.payload == 1);
+    assert(dlist.tail.payload == 2);
 }
 
-private uint useFreePosition(ubyte[] m) @safe @nogc
+private byte useFreePosition(ubyte[] m) @safe @nogc
 {
     import core.bitop: bsf;
     //
@@ -763,7 +952,7 @@ private uint useFreePosition(ubyte[] m) @safe @nogc
         {
             auto p = bsf(v ^ 0xff);
             m[i] += 1 << p;
-            return (i<<3)+p;
+            return cast(byte)((i<<3)+p);
         }
     }
     assert(0);
@@ -775,13 +964,25 @@ private void markFreePosition(ubyte[] m, size_t position) @safe @nogc
     m[p] &= (1<<b)^0xff;
 }
 
+private bool isFreePosition(ubyte[] m, size_t position) @safe @nogc
+{
+    auto p = position >> 3;
+    auto b = position & 0x7;
+    return (m[p] & (1<<b)) == 0;
+}
+
 @safe unittest
 {
+    import std.experimental.logger;
+    globalLogLevel = LogLevel.info;
     import std.algorithm.comparison: equal;
     ubyte[] map = [0,0];
     auto p = useFreePosition(map);
     assert(p == 0, "expected 0, got %s".format(p));
     assert(map[0] == 1);
+    assert(!isFreePosition(map, 0));
+    assert(isFreePosition(map, 1));
+
     p = useFreePosition(map);
     assert(p == 1, "expected 1, got %s".format(p));
     map = [255,0];
@@ -804,94 +1005,256 @@ struct CompressedList(T, Allocator = Mallocator)
 {
     alias allocator = Allocator.instance;
     alias StoredT = StoredType!T;
-    enum PageSize = 128;    // in bytes
-    static assert(PageSize/Node.sizeof > 1, "Node is too large to use this List, use DList instead");
+    //enum MAGIC = 0x00160162;
+    enum PageSize = 512;    // in bytes
     enum NodesPerPage = PageSize/Node.sizeof;
-    enum BitMapLength = NodesPerPage / 8;
+    static assert(NodesPerPage >= 1, "Node is too large to use this List, use DList instead");
+    static assert(NodesPerPage <= 255, "Strange, but Node size is too small to use this List, use DList instead");
+
+    enum BitMapLength = NodesPerPage % 8 ? NodesPerPage/8+1 : NodesPerPage/8;
+
     ///
     /// unrolled list with support only for:
     /// 1) insert/delete front
     /// 2) insert/delete back
-    /// 3) keep smart-pointer to arbitrary element
-    /// 4) remove element by smart-pointer
-    struct Page
-    {
+    /// 3) keep unstable "pointer" to arbitrary element
+    /// 4) remove element by pointer
+    struct Page {
         ///
         /// Page is fixed-length array of list Nodes
         /// with batteries
         ///
-        ubyte               count;
-        ubyte[BitMapLength] freeMap;
+        //uint                _magic = MAGIC;
+        //uint                _epoque;    // increment each time we move to freelist
+        ubyte[BitMapLength] _freeMap;
         Page*               _nextPage;
         Page*               _prevPage;
         byte                _firstNode;
         byte                _lastNode;
+        ubyte               _count;      // nodes counter
         Node[NodesPerPage]  _nodes;
     }
-    struct Node
-    {
+
+    struct Node {
         StoredT v;
         byte    n; // next index
         byte    p; // prev index
+    }
+
+    struct NodePointer {
+        private
+        {
+            //uint    _epoque;
+            Page*   _page;
+            byte    _index;
+        }
+        this(Page* page, byte index)
+        {
+            //_epoque = page._epoque;
+            _page = page;
+            _index = index;
+        }
+        ///
+        /// This is unsafe as you may refer to deleted node.
+        /// You are free to wrap it in @trusted code if you know what are you doing.
+        ///
+        T opUnary(string s)() @system if (s == "*")
+        {
+            assert(_page !is null);
+            //assert(_page._magic == MAGIC, "Pointer resolution to freed or damaged page");
+            //assert(_page._epoque == _epoque, "Page were freed");
+            assert(!isFreePosition(_page._freeMap, _index), "you tried to access already free list element");
+            return _page._nodes[_index].v;
+        }
+    }
+
+    private struct Range {
+        Page* page;
+        byte  index;
+
+        T front() @safe {
+            if ( page !is null && index == -1)
+            {
+                index = page._firstNode;
+            }
+            return page._nodes[index].v;
+        }
+        void popFront() @safe {
+            if ( page !is null && index == -1)
+            {
+                index = page._firstNode;
+            }
+            index = page._nodes[index].n;
+            if ( index != -1 )
+            {
+                return;
+            }
+            page = page._nextPage;
+            if ( page is null )
+            {
+                return;
+            }
+            index = page._firstNode;
+        }
+        bool empty() const @safe {
+            return page is null;
+        } 
+    }
+    Range range() @safe {
+        return Range(_pages_first, -1);
     }
     private
     {
         Page*   _pages_first, _pages_last;
         ulong   _length;
+
         Page*   _freelist;
         int     _freelist_len;
         enum    _freelist_len_max = 100;
     }
-    private void move_to_feelist(Page* page) @safe @nogc
-    {
+    private void move_to_freelist(Page* page) @safe @nogc {
         if ( _freelist_len >= _freelist_len_max )
         {
             debug(cachetools) safe_tracef("dispose page");
-            () @trusted {dispose(allocator, page);}();
+            () @trusted {
+                static if ( !is(Allocator == GCAllocator) ) {
+                    GC.removeRange(page);
+                }
+                dispose(allocator, page);
+            }();
             return;
         }
         debug(cachetools) safe_tracef("put page in freelist");
+        //page._epoque++;
         page._nextPage = _freelist;
         _freelist = page;
         _freelist_len++;
     }
-    private Page* peek_from_freelist() @safe @nogc
-    {
+
+    private Page* peek_from_freelist() @safe {
         if ( _freelist is null )
         {
-            return null;
+            Page* page = make!Page(allocator);
+            static if ( !is(Allocator == GCAllocator) ) {
+                () @trusted {
+                    GC.addRange(page, Page.sizeof);
+                }();
+            }
+            _freelist = page;
+            _freelist_len = 1;
         }
         Page* p = _freelist;
         _freelist = p._nextPage;
         _freelist_len--;
         assert(_freelist_len>=0 && _freelist_len < _freelist_len_max);
         p._nextPage = p._prevPage = null;
+        p._firstNode = p._lastNode = -1;
         return p;
     }
-    bool empty() @safe const
-    {
+
+    ~this() @safe {
+        clear();
+    }
+
+    void clear() @safe {
+        _length = 0;
+        Page* page = _pages_first, next;
+        while(page)
+        {
+            next = page._nextPage;
+            () @trusted {
+                static if ( !is(Allocator == GCAllocator) ) {
+                    GC.removeRange(page);
+                }
+                dispose(allocator, page);
+            }();
+            page = next;
+        }
+        page = _freelist;
+        while(page)
+        {
+            next = page._nextPage;
+            () @trusted {
+                static if ( !is(Allocator == GCAllocator) ) {
+                    GC.removeRange(page);
+                }
+                dispose(allocator, page);
+            }();
+            page = next;
+        }
+        _length = 0;
+        _pages_first = _pages_last = _freelist = null;
+    }
+
+    bool empty() @safe const {
         return _length == 0;
     }
-    ulong length() @safe const
-    {
+
+    ulong length() @safe const {
         return _length;
     }
-    T front() @safe
-    {
+
+    void remove(ref NodePointer p) @system {
+        if ( empty )
+        {
+            assert(0, "Tried to remove from empty list");
+        }
+        _length--;
+        Page *page = p._page;
+        byte index = p._index;
+        assert(!isFreePosition(page._freeMap, index), "you tried to remove already free list element");
+        with (page)
+        {
+            assert(_count>0);
+            _count--;
+            // unlink from list
+            auto next = _nodes[index].n;
+            auto prev = _nodes[index].p;
+            if ( prev >= 0)
+            {
+                _nodes[prev].n = next;
+            }
+            else
+            {
+                _firstNode = next;
+            }
+            if ( next >= 0)
+            {
+                _nodes[next].p = prev;
+            }
+            else
+            {
+                _lastNode = prev;
+            }
+            markFreePosition(_freeMap, index);
+        }
+        if ( page._count == 0 )
+        {
+            // relase this page
+            _pages_first = page._nextPage;
+            move_to_freelist(page);
+            if ( _pages_first is null )
+            {
+                _pages_last = null;
+            }
+        }
+    }
+
+    T front() @safe {
         if ( empty )
         {
             assert(0, "Tried to access front of empty list");
         }
         Page* p = _pages_first;
         assert( p !is null);
-        assert( p.count > 0 );
+        assert( p._count > 0 );
         with(p)
         {
             return _nodes[_firstNode].v;
         }
     }
-    void popFront() @safe
-    {
+
+    void popFront() @safe {
         if ( empty )
         {
             assert(0, "Tried to popFront from empty list");
@@ -900,26 +1263,26 @@ struct CompressedList(T, Allocator = Mallocator)
         Page* page = _pages_first;
         assert(page !is null);
         with (page) {
-            assert(count>0);
+            assert(_count>0);
             auto f = _firstNode;
             auto n = _nodes[f].n;
-            markFreePosition(freeMap, f);
-            count--;
+            markFreePosition(_freeMap, f);
+            _count--;
             _firstNode = n;
         }
-        if ( page.count == 0 )
+        if ( page._count == 0 )
         {
             // relase this page
             _pages_first = page._nextPage;
-            move_to_feelist(page);
+            move_to_freelist(page);
             if ( _pages_first is null )
             {
                 _pages_last = null;
             }
         }
     }
-    void insertFront(T v) @safe
-    {
+
+    NodePointer insertFront(T v) @safe {
         _length++;
         Page* page = _pages_first;
         if ( page is null )
@@ -927,33 +1290,21 @@ struct CompressedList(T, Allocator = Mallocator)
             page = peek_from_freelist();
             _pages_first = _pages_last = page;
         }
-        if ( page is null )
-        {
-            page = make!Page(allocator);
-            page._firstNode = page._lastNode = -1;
-            _pages_first = _pages_last = page;
-        }
-        if (page.count == NodesPerPage)
+        if (page._count == NodesPerPage)
         {
             Page* new_page = peek_from_freelist();
-            if ( new_page is null )
-            {
-                debug(cachetools) safe_tracef("Create new page");
-                new_page = make!Page(allocator);
-            }
-            new_page._firstNode = page._lastNode = -1;
             new_page._nextPage = page;
             page._prevPage = new_page;
             _pages_first = new_page;
             page = new_page;
         }
         // there is free space
-        auto index = useFreePosition(page.freeMap);
+        auto index = useFreePosition(page._freeMap);
         assert(index < NodesPerPage);
         page._nodes[index].v = v;
         page._nodes[index].p = -1;
         page._nodes[index].n = page._firstNode;
-        if (page.count == 0)
+        if (page._count == 0)
         {
             page._firstNode = page._lastNode = cast(ubyte)index;
         }
@@ -962,11 +1313,56 @@ struct CompressedList(T, Allocator = Mallocator)
             page._nodes[page._firstNode].p = cast(ubyte)index;
             page._firstNode = cast(ubyte)index;
         }
-        page.count++;
+        page._count++;
         debug(cachetools) safe_tracef("page: %s", *page);
+        return NodePointer(page, index);
     }
-    void insertBack(T v) @safe
-    {
+
+    T back() @safe {
+        if ( empty )
+        {
+            assert(0, "Tried to access back of empty list");
+        }
+        Page* p = _pages_last;
+        assert( p !is null);
+        assert( p._count > 0 );
+        debug(cachetools) safe_tracef("page: %s", *p);
+        with(p)
+        {
+            return _nodes[_lastNode].v;
+        }
+    }
+
+    void popBack() @safe {
+        if ( empty )
+        {
+            assert(0, "Tried to popBack from empty list");
+        }
+        _length--;
+        Page* page = _pages_last;
+        assert(page !is null);
+        with (page) {
+            assert(_count>0);
+            auto last = _lastNode;
+            auto prev = _nodes[last].p;
+            markFreePosition(_freeMap, last);
+            _count--;
+            _lastNode = prev;
+        }
+        if ( page._count == 0 )
+        {
+            debug(cachetools) safe_tracef("release page");
+            // relase this page
+            _pages_last = page._prevPage;
+            move_to_freelist(page);
+            if ( _pages_last is null )
+            {
+                _pages_first = null;
+            }
+        }
+    }
+
+    NodePointer insertBack(T v) @safe {
         _length++;
         Page* page = _pages_last;
         if ( page is null )
@@ -974,33 +1370,21 @@ struct CompressedList(T, Allocator = Mallocator)
             page = peek_from_freelist();
             _pages_first = _pages_last = page;
         }
-        if ( page is null )
-        {
-            page = make!Page(allocator);
-            page._firstNode = page._lastNode = -1;
-            _pages_first = _pages_last = page;
-        }
-        if (page.count == NodesPerPage)
+        if (page._count == NodesPerPage)
         {
             Page* new_page = peek_from_freelist();
-            if ( new_page is null )
-            {
-                debug(cachetools) safe_tracef("Create new page");
-                new_page = make!Page(allocator);
-            }
-            new_page._firstNode = page._lastNode = -1;
             new_page._prevPage = page;
             page._nextPage = new_page;
             _pages_last = new_page;
             page = new_page;
         }
         // there is free space
-        auto index = useFreePosition(page.freeMap);
+        auto index = useFreePosition(page._freeMap);
         assert(index < NodesPerPage);
         page._nodes[index].v = v;
         page._nodes[index].n = -1;
         page._nodes[index].p = page._lastNode;
-        if (page.count == 0)
+        if (page._count == 0)
         {
             page._firstNode = page._lastNode = cast(ubyte)index;
         }
@@ -1009,28 +1393,30 @@ struct CompressedList(T, Allocator = Mallocator)
             page._nodes[page._lastNode].n = cast(ubyte)index;
             page._lastNode = cast(ubyte)index;
         }
-        page.count++;
+        page._count++;
         debug(cachetools) safe_tracef("page: %s", *page);
+        return NodePointer(page, index);
     }
 }
 
 @safe unittest
 {
     import std.experimental.logger;
-    globalLogLevel = LogLevel.trace;
-    CompressedList!int  list;
-    foreach(i;1..19)
+    globalLogLevel = LogLevel.info;
+    CompressedList!int list;
+    foreach(i;0..66)
     {
         list.insertFront(i);
         assert(list.front == i);
     }
-    assert(list.length == 18);
+    assert(list.length == 66);
+    assert(list.back == 0);
     list.popFront();
-    assert(list.length == 17);
-    assert(list.front == 17);
+    assert(list.length == 65);
+    assert(list.front == 64);
     list.popFront();
-    assert(list.length == 16);
-    assert(list.front == 16);
+    assert(list.length == 64);
+    assert(list.front == 63);
     while( !list.empty )
     {
         list.popFront();
@@ -1040,13 +1426,41 @@ struct CompressedList(T, Allocator = Mallocator)
         list.insertFront(i);
         assert(list.front == i);
     }
-    while( !list.empty )
+    foreach(i;1..19)
     {
-        list.popFront();
+        assert(list.back == i);
+        assert(list.length == 19-i);
+        list.popBack();
     }
-    list.insertBack(99);
+    assert(list.empty);
+    auto p99 = list.insertBack(99);
     assert(list.front == 99);
-    list.insertBack(100);
+    assert(list.back == 99);
+    auto p100 = list.insertBack(100);
     assert(list.front == 99);
-    list.insertFront(98);
+    assert(list.back == 100);
+    auto p98 = list.insertFront(98);
+
+    () @trusted // * and remove for poiners is unsafe
+    {
+        assert(*p98 == 98);
+        assert(list.length == 3);
+        list.remove(p98);
+        assert(list.length == 2);
+        assert(list.front == 99);
+        list.remove(p100);
+        assert(list.length == 1);
+        assert(list.front == 99);
+        assert(list.back == 99);
+        list.remove(p99);
+        assert(list.length == 0);
+    }();
+
+    () @nogc
+    {
+        struct S {}
+        CompressedList!(immutable S) islist;
+        immutable S s = S();
+        islist.insertFront(s);
+    }();
 }
