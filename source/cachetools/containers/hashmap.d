@@ -562,7 +562,7 @@ package struct ChainedHashMap(K, V, Allocator = Mallocator)
         () @nogc nothrow
         {
             T hashMap;
-            safe_tracef("Testing %s", typeid(T));
+            debug safe_tracef("Testing %s", typeid(T));
             foreach (i;0..10) {
                 hashMap.put(i, i);
             }
