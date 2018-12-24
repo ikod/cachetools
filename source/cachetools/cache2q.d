@@ -293,7 +293,7 @@ class Cache2Q(K, V, Allocator=Mallocator)
         cache.get(i-3);
     }
     cache.put(11,11);
-    // In:   [12, 10]
+    // In:   [11, 10]
     // Out:  [8, 9]
     // Main: [0, 6, 7, 2, 3, 1, 5, 4]
     assert(cache._InMap.length == 2);
@@ -317,5 +317,25 @@ class Cache2Q(K, V, Allocator=Mallocator)
         assert(cache.remove(i), "failed to remove %s".format(i));
     }
     assert(cache.length==0);
+    foreach(i;0..11)
+    {
+        cache.put(i,i);
+        cache.get(i-3);
+    }
+    cache.put(11,11);
+    // In:   [11, 10]
+    // Out:  [8, 9]
+    // Main: [0, 6, 7, 2, 3, 1, 5, 4]
+    cache.put(11,22);
+    cache.put(8, 88);
+    cache.put(5,55);
+    assert(cache.get(5) == 55);
+    assert(cache.get(11) == 22);
+    assert(cache.length==12, "expected 12, got %d".format(cache.length));
+    assert(cache.get(8) == 88); // 8 moved from Out to Main
+    assert(cache.length==11, "expected 11, got %d".format(cache.length));
+    cache.put(12,12);   // in iverflowed, out filled
+    cache.put(13, 13);  // in overflowed, out overflowed to main
+    assert(cache.length==12, "expected 12, got %d".format(cache.length));
     globalLogLevel = LogLevel.info;
 }
