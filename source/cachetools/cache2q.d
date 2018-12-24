@@ -78,39 +78,55 @@ class Cache2Q(K, V, Allocator=Mallocator)
 
         int _kin, _kout, _km;
 
-        CompressedList!(ListElement, Allocator)     _A1InList;
-        CompressedList!(ListElement, Allocator)     _A1OutList;
-        DList!(ListElement, Allocator)              _AmList;
+        CompressedList!(ListElement, Allocator)     _InList;
+        CompressedList!(ListElement, Allocator)     _OutList;
+        DList!(ListElement, Allocator)              _MainList;
 
-        HashMap!(K, MapElement, Allocator)          _A1InMap;
-        HashMap!(K, MapElement, Allocator)          _A1OutMap;
-        HashMap!(K, MainMapElement, Allocator)      _AmMap;
+        HashMap!(K, MapElement, Allocator)          _InMap;
+        HashMap!(K, MapElement, Allocator)          _OutMap;
+        HashMap!(K, MainMapElement, Allocator)      _MainMap;
 
     }
 
+    final ~this() @safe
+    {
+        //clear();
+    }
     final auto size(uint s)
     {
-        _kin =  s/6;
-        _kout = s/2;
-        _km = 2*s/3;
+        _kin =  1*s/6;
+        _kout = 1*s/6;
+        _km =   4*s/6;
         return this;
     }
-
+    final auto length() @safe
+    {
+        return _InMap.length + _OutMap.length + _MainMap.length;
+    }
+    final void clear() @safe
+    {
+        _InList.clear();
+        _OutList.clear();
+        _MainList.clear();
+        _InMap.clear();
+        _OutMap.clear();
+        _MainMap.clear();
+    }
     final Nullable!V get(K k) @safe
     {
         debug(cachetools) safe_tracef("get %s", k);
 
-        auto keyInAm = k in _AmMap;
+        auto keyInAm = k in _MainMap;
         if ( keyInAm )
         {
             debug(cachetools) safe_tracef("%s in main cache", k);
             MainMapElement mapElement = *keyInAm;
-            _AmList.move_to_head(mapElement.list_element_ptr);
+            _MainList.move_to_head(mapElement.list_element_ptr);
             return Nullable!V(mapElement.value);
         }
         debug(cachetools) safe_tracef("%s not in main cache", k);
 
-        auto keyInA1Out = k in _A1OutMap;
+        auto keyInA1Out = k in _OutMap;
         if ( keyInA1Out )
         {
             debug(cachetools) safe_tracef("%s in A1Out cache", k);
@@ -119,27 +135,27 @@ class Cache2Q(K, V, Allocator=Mallocator)
             () @trusted
             {
                 assert((*keyInA1Out.list_element_ptr).key == k);
-                _A1OutList.remove(keyInA1Out.list_element_ptr);
+                _OutList.remove(keyInA1Out.list_element_ptr);
             }();
 
-            bool removed = _A1OutMap.remove(k);
+            bool removed = _OutMap.remove(k);
             assert(removed);
             debug(cachetools) safe_tracef("%s removed from A1Out cache", k);
 
-            auto mlp = _AmList.insertFront(ListElement(k));
-            _AmMap.put(k, MainMapElement(value, mlp));
+            auto mlp = _MainList.insertFront(ListElement(k));
+            _MainMap.put(k, MainMapElement(value, mlp));
             debug(cachetools) safe_tracef("%s placed to Main cache", k);
-            if ( _AmList.length > _km )
+            if ( _MainList.length > _km )
             {
-                debug(cachetools) safe_tracef("Main cache overflowed, pop %s", _AmList.tail().key);
-                _AmMap.remove(_AmList.tail().key);
-                _AmList.popBack();
+                debug(cachetools) safe_tracef("Main cache overflowed, pop %s", _MainList.tail().key);
+                _MainMap.remove(_MainList.tail().key);
+                _MainList.popBack();
             }
             return Nullable!V(value);
         }
         debug(cachetools) safe_tracef("%s not in A1Out cache", k);
 
-        auto keyInA1In = k in _A1InMap;
+        auto keyInA1In = k in _InMap;
         if ( keyInA1In )
         {
             debug(cachetools) safe_tracef("%s in A1In cache", k);
@@ -158,7 +174,7 @@ class Cache2Q(K, V, Allocator=Mallocator)
     }
     do
     {
-        auto keyInAm = k in _AmMap;
+        auto keyInAm = k in _MainMap;
         if ( keyInAm )
         {
             (*keyInAm).value = v;
@@ -167,7 +183,7 @@ class Cache2Q(K, V, Allocator=Mallocator)
         }
         debug(cachetools) safe_tracef("%s not in Main cache", k);
 
-        auto keyInA1Out = k in _A1OutMap;
+        auto keyInA1Out = k in _OutMap;
         if ( keyInA1Out )
         {
             (*keyInA1Out).value = v;
@@ -176,7 +192,7 @@ class Cache2Q(K, V, Allocator=Mallocator)
         }
         debug(cachetools) safe_tracef("%s not in Out cache", k);
 
-        auto keyInA1 = k in _A1InMap;
+        auto keyInA1 = k in _InMap;
         if ( keyInA1 )
         {
             (*keyInA1).value = v;
@@ -187,47 +203,82 @@ class Cache2Q(K, V, Allocator=Mallocator)
         {
             // XXX do not check InMap twice: 1. k in map, 2. put(k)
             debug(cachetools) safe_tracef("insert %s in A1InFifo", k);
-            ListElementPtrType lp = _A1InList.insertBack(ListElement(k));
-            _A1InMap.put(k, MapElement(v, lp));
-            if ( _A1InList.length <= _kin )
+            ListElementPtrType lp = _InList.insertBack(ListElement(k));
+            _InMap.put(k, MapElement(v, lp));
+            if ( _InList.length <= _kin )
             {
                 return PutResult(PutResultFlag.Inserted);
             }
 
-            auto f = _A1InList.front;
+            auto f = _InList.front;
             auto toOutK = f.key;
-            auto toOutV = (*(toOutK in _A1InMap)).value;
+            auto toOutV = (*(toOutK in _InMap)).value;
             debug(cachetools) safe_tracef("pop %s from A1InFifo", toOutK);
-            _A1InList.popFront();
-            bool removed = _A1InMap.remove(toOutK);
+            _InList.popFront();
+            bool removed = _InMap.remove(toOutK);
             assert(removed);
 
-            assert(_A1InList.length == _A1InMap.length);
+            assert(_InList.length == _InMap.length);
 
             // and push to A1Out
-            lp = _A1OutList.insertBack(ListElement(toOutK));
-            _A1OutMap.put(toOutK, MapElement(toOutV, lp));
-            if ( _A1OutList.length <= _kout )
+            lp = _OutList.insertBack(ListElement(toOutK));
+            _OutMap.put(toOutK, MapElement(toOutV, lp));
+            if ( _OutList.length <= _kout )
             {
                 return PutResult(PutResultFlag.Inserted);
             }
             //
             // A1Out overflowed - throw away head
             //
-            f = _A1OutList.front;
-            _A1OutList.popFront();
+            f = _OutList.front;
+            _OutList.popFront();
             debug(cachetools) safe_tracef("pop %s from A1OutFifo", f.key);
-            removed = _A1OutMap.remove(f.key);
+            removed = _OutMap.remove(f.key);
             assert(removed);
-            assert(_A1OutList.length == _A1OutMap.length);
+            assert(_OutList.length == _OutMap.length);
         }
         return PutResult(PutResultFlag.Inserted);
+    }
+    final bool remove(K k) @safe
+    {
+        debug(cachetools) safe_tracef("remove from 2qcache key %s", k);
+        auto inIn = k in _InMap;
+        if ( inIn )
+        {
+            auto lp = inIn.list_element_ptr;
+            () @trusted
+            {
+                _InList.remove(lp);
+            }();
+            _InMap.remove(k);
+            return true;
+        }
+        auto inOut = k in _OutMap;
+        if ( inOut )
+        {
+            auto lp = inOut.list_element_ptr;
+            () @trusted
+            {
+                _OutList.remove(lp);
+            }();
+            _OutMap.remove(k);
+            return true;
+        }
+        auto inMain = k in _MainMap;
+        if ( inMain )
+        {
+            auto lp = inMain.list_element_ptr;
+            _MainList.remove(lp);
+            _MainMap.remove(k);
+            return true;
+        }
+        return false;
     }
 }
 
 @safe unittest
 {
-    import std.stdio;
+    import std.stdio, std.format;
     import std.datetime;
     import core.thread;
     import std.algorithm;
@@ -235,38 +286,36 @@ class Cache2Q(K, V, Allocator=Mallocator)
     globalLogLevel = LogLevel.info;
     info("Testing 2Q");
     auto cache = new Cache2Q!(int, int);
-    cache.size = 9;
-    cache.get(1);
-    cache.put(1,1);
-    cache.put(2,2);
-    cache.put(3,3);
-    // 1,2,3 in In
-    cache.put(4,4);
-    cache.put(5,5);
-    cache.put(6,6);
-    // 1,2,3 in Out, 4,5,6 in In
-    //writefln("In:  %s", cache._A1InMap.byKey);
-    //writefln("Out: %s", cache._A1OutMap.byKey);
-    //writefln("Am: %s", cache._AmMap.byKey);
-    //assert(cache.get(6) == 6);
-    //writefln("In:  %s", cache._A1InMap.byKey);
-    //writefln("Out: %s", cache._A1OutMap.byKey);
-    //writefln("Am: %s", cache._AmMap.byKey);
-    //assert(cache.get(1) == 1);
-    //writefln("In:  %s", cache._A1InMap.byKey);
-    //writefln("Out: %s", cache._A1OutMap.byKey);
-    //writefln("Am: %s", cache._AmMap.byKey);
-    //assert(cache.get(1) == 1);
-    //cache.put(1,11);
-    //assert(cache.get(1) == 11);
-    //cache.put(7,7);
-    //writefln("In:  %s", cache._A1InMap.byKey);
-    //writefln("Out: %s", cache._A1OutMap.byKey);
-    //writefln("Am: %s", cache._AmMap.byKey);
-    //cache.put(8,8);
-    //writefln("In:  %s", cache._A1InMap.byKey);
-    //writefln("Out: %s", cache._A1OutMap.byKey);
-    //writefln("Am: %s", cache._AmMap.byKey);
-    //assert(cache.get(2).isNull);
+    cache.size = 12;
+    foreach(i;0..11)
+    {
+        cache.put(i,i);
+        cache.get(i-3);
+    }
+    cache.put(11,11);
+    // In:   [12, 10]
+    // Out:  [8, 9]
+    // Main: [0, 6, 7, 2, 3, 1, 5, 4]
+    assert(cache._InMap.length == 2);
+    assert(cache._OutMap.length == 2);
+    assert(cache._MainMap.length == 8);
+    assert(cache.length==12, "expected 12, got %d".format(cache.length));
+    foreach(i;0..12)
+    {
+        assert(cache.get(i) == i, "missed %s".format(i));
+    }
+    cache.clear();
+    assert(cache.length==0);
+    foreach(i;0..11)
+    {
+        cache.put(i,i);
+        cache.get(i-3);
+    }
+    cache.put(11,11);
+    foreach(i;0..12)
+    {
+        assert(cache.remove(i), "failed to remove %s".format(i));
+    }
+    assert(cache.length==0);
     globalLogLevel = LogLevel.info;
 }
