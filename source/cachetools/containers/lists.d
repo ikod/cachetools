@@ -463,21 +463,6 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         n.next = null;
         _tail = n;
 
-        ////debug(cachetools) tracef("n: %s".format(*n));
-        //assert(n.next !is null);
-        ////debug tracef("m-t-t: %s, tail: %s", *n, *_tail);
-        //assert(n.next, "non-tail entry have no 'next' pointer?");
-        //if ( _head == n ) {
-        //    assert(n.prev is null);
-        //    _head = n.next;
-        //} else {
-        //    n.prev.next = n.next;
-        //}
-        //// move this node to end
-        //n.next.prev = n.prev;
-        //n.next = null;
-        //tail.next = n;
-        //_tail = n;
     }
 
     void move_to_head(Node!T* n) @safe @nogc
@@ -870,30 +855,67 @@ struct SList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
     }
 }
 
-@safe @nogc nothrow unittest {
+@safe nothrow unittest {
+    import std.algorithm.comparison;
+
     DList!int dlist;
-    auto n0 = dlist.insertFront(0);
-    assert(dlist.head.payload == 0);
-    dlist.remove(n0);
-    auto n1 = dlist.insert_last(1);
-    assert(dlist.length == 1);
-    dlist.remove(n1);
-    assert(dlist.length == 0);
+    () @nogc 
+    {
+        auto n0 = dlist.insertFront(0);
+        assert(dlist.head.payload == 0);
+        dlist.remove(n0);
+        auto n1 = dlist.insert_last(1);
+        assert(dlist.length == 1);
+        dlist.remove(n1);
+        assert(dlist.length == 0);
 
-    n1 = dlist.insert_first(1);
-    assert(dlist.length == 1);
-    dlist.remove(n1);
-    assert(dlist.length == 0);
+        n1 = dlist.insert_first(1);
+        assert(dlist.length == 1);
+        dlist.remove(n1);
+        assert(dlist.length == 0);
 
-    n1 = dlist.insert_first(1);
-    auto n2 = dlist.insert_last(2);
-    assert(dlist.length == 2);
-    dlist.move_to_tail(n1);
-    assert(dlist.head.payload == 2);
-    assert(dlist.tail.payload == 1);
-    dlist.move_to_head(n1);
-    assert(dlist.head.payload == 1);
-    assert(dlist.tail.payload == 2);
+        n1 = dlist.insert_first(1);
+        auto n2 = dlist.insert_last(2);
+        assert(dlist.length == 2);
+        dlist.move_to_tail(n1);
+        assert(dlist.head.payload == 2);
+        assert(dlist.tail.payload == 1);
+        dlist.move_to_head(n1);
+        assert(dlist.head.payload == 1);
+        assert(dlist.tail.payload == 2);
+        dlist.clear();
+        auto p = dlist.insertBack(1);
+        dlist.insertBack(2);
+        dlist.insertBack(3);
+        dlist.insertFront(0);
+        dlist.move_to_tail(p);
+        dlist.move_to_head(p);
+        dlist.remove(p);
+    }();
+    assert(equal(dlist.range(), [0, 2, 3]));
+    dlist.clear();
+    class C
+    {
+        int c;
+        this(int v)
+        {
+            c = v;
+        }
+    }
+    DList!C dlist_c;
+    // test freelist ops
+    foreach(i;0..1000)
+    {
+        dlist_c.insertBack(new C(i));
+    }
+    foreach(i;0..1000)
+    {
+        dlist_c.popFront();
+    }
+    assert(dlist_c.length() == 0);
+    dlist_c.popFront();
+    dlist_c.popBack();
+    assert(dlist_c.length() == 0);
 }
 
 private byte useFreePosition(ubyte[] m) @safe @nogc
