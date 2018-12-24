@@ -10,6 +10,7 @@ import core.bitop;
 
 private import std.experimental.allocator;
 private import std.experimental.allocator.mallocator: Mallocator;
+private import std.experimental.allocator.gc_allocator;
 
 private import cachetools.internal;
 private import cachetools.hash;
@@ -150,17 +151,21 @@ package struct ChainedHashMap(K, V, Allocator = Mallocator)
                 while(n)
                 {
                     auto next = n.next_node;
-                    (() @trusted {
-                        GC.removeRange(n);
+                    () @trusted {
+                        static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+                            GC.removeRange(n);
+                        }
                         dispose(allocator, n);
-                    })();
+                    }();
                     n = next;
                 }
             }
-            (() @trusted {
-                GC.removeRange(_buckets.ptr);
+            () @trusted {
+                static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+                    GC.removeRange(_buckets.ptr);
+                }
                 dispose(allocator, _buckets);
-            })();
+            }();
         }
     }
         
@@ -181,10 +186,11 @@ package struct ChainedHashMap(K, V, Allocator = Mallocator)
         // allocate and place right after the bucket
         debug(cachetools) safe_tracef("Place key %s to chain %d", source.key, index);
         _Node* new_node = make!(_Node)(allocator);
-        () @trusted {
-            // XXX only if not Allocator == GCAllocator?
-            GC.addRange(new_node, _Node.sizeof);
-        }();
+        static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+            () @trusted {
+                GC.addRange(new_node, _Node.sizeof);
+            }();
+        }
         *new_node = *source;
         new_node.next_node = n.next_node;
         n.next_node = new_node;
@@ -208,9 +214,13 @@ package struct ChainedHashMap(K, V, Allocator = Mallocator)
         debug(cachetools) safe_tracef("resizing from %d to %s", _buckets_num, dest);
 
         _Bucket[] _new_buckets = makeArray!(_Bucket)(allocator, _new_buckets_num);
-        () @trusted {
-            GC.addRange(_new_buckets.ptr, _new_buckets.length * _Bucket.sizeof);
-        }();
+
+        static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+            () @trusted {
+                GC.addRange(_new_buckets.ptr, _new_buckets.length * _Bucket.sizeof);
+            }();
+        }
+
         int new_allocated = 0;
         
         // iterate over entries
@@ -237,7 +247,9 @@ package struct ChainedHashMap(K, V, Allocator = Mallocator)
         }
 
         (() @trusted {
-            GC.removeRange(_buckets.ptr);
+            static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+                GC.removeRange(_buckets.ptr);
+            }
             dispose(allocator, _buckets);
         })();
         assert(_allocated == new_allocated);
@@ -261,10 +273,11 @@ package struct ChainedHashMap(K, V, Allocator = Mallocator)
             assert(popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
             _mask = _buckets_num - 1;
             _buckets = makeArray!(_Bucket)(allocator, _buckets_num);
-            () @trusted {
-                // XXX only if not Allocator == GCAllocator?
-                GC.addRange(_buckets.ptr, _buckets_num * _Bucket.sizeof);
-            }();
+            static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+                () @trusted {
+                    GC.addRange(_buckets.ptr, _buckets_num * _Bucket.sizeof);
+                }();
+            }
         }
 
         if ( _allocated>>1 > _buckets_num ) // 4 node per bucket
@@ -329,10 +342,11 @@ package struct ChainedHashMap(K, V, Allocator = Mallocator)
             }
             debug(cachetools) safe_tracef("Create new node for key %s", k);
             _Node* new_node = make!(_Node)(allocator);
-            () @trusted {
-                // XXX only if not Allocator == GCAllocator?
-                GC.addRange(new_node, _Node.sizeof);
-            }();
+            static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+                () @trusted {
+                    GC.addRange(new_node, _Node.sizeof);
+                }();
+            }
             assert(prev !is null);
             prev.next_node = new_node;
             new_node.key = k;
@@ -507,8 +521,9 @@ package struct ChainedHashMap(K, V, Allocator = Mallocator)
                 // remove this node
                 p.next_node = n.next_node;
                 () @trusted {
-                    // XXX removeRange only if Allocator != GCAllocator?
-                    GC.removeRange(n);
+                    static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+                        GC.removeRange(n);
+                    }
                     dispose(allocator, n);
                 }();
                 bucket.length--;
@@ -672,12 +687,20 @@ struct HashMap(K, V, Allocator = Mallocator) {
                     {
                         continue;
                     }
-                    (() @trusted {dispose(allocator, _buckets[i].value_ptr);})();
+                    () @trusted
+                    {
+                        static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+                            GC.removeRange(_buckets[i].value_ptr);
+                        }
+                        dispose(allocator, _buckets[i].value_ptr);
+                    }();
                 }
             }
             (() @trusted {
-                GC.removeRange(_buckets.ptr);
-                dispose(allocator, _buckets);
+                static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+                    GC.removeRange(_buckets.ptr);
+                }
+                dispose(allocator, _buckets.ptr);
             })();
         }
     }
@@ -824,7 +847,12 @@ struct HashMap(K, V, Allocator = Mallocator) {
         immutable _new_mask = dest - 1;
         _Bucket[] _new_buckets = makeArray!(_Bucket)(allocator, _new_buckets_num);
 
-        () @trusted {GC.addRange(_new_buckets.ptr, _new_buckets_num * _Bucket.sizeof);}();
+        static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+            () @trusted
+            {
+                GC.addRange(_new_buckets.ptr, _new_buckets_num * _Bucket.sizeof);
+            }();
+        }
 
         // iterate over entries
 
@@ -846,10 +874,12 @@ struct HashMap(K, V, Allocator = Mallocator) {
 
             _new_buckets[cast(hash_t)new_position] = _buckets[i];
         }
-        (() @trusted {
-            GC.removeRange(_buckets.ptr);
-            dispose(allocator, _buckets);
-        })();
+        () @trusted {
+            static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+               GC.removeRange(_buckets.ptr);
+            }
+            dispose(allocator, _buckets.ptr);
+        }();
         _buckets = _new_buckets;
         _buckets_num = _new_buckets_num;
         assert(popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
@@ -975,7 +1005,11 @@ struct HashMap(K, V, Allocator = Mallocator) {
             assert(popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
             _mask = _buckets_num - 1;
             _buckets = makeArray!(_Bucket)(allocator, _buckets_num);
-            () @trusted {GC.addRange(_buckets.ptr, _buckets_num * _Bucket.sizeof);}();
+            () @trusted {
+                static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+                    GC.addRange(_buckets.ptr, _buckets_num * _Bucket.sizeof);
+                }
+            }();
         }
 
         debug(cachetools) safe_tracef("put k: %s, v: %s", k,v);
@@ -1064,7 +1098,12 @@ struct HashMap(K, V, Allocator = Mallocator) {
         {
             // what we have to do with removed values XXX?
             // free space
-            (() @trusted {dispose(allocator, _buckets[lookup_index].value_ptr);})();
+            () @trusted {
+                static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+                    GC.removeRange(_buckets[lookup_index].value_ptr);
+                }
+                dispose(allocator, _buckets[lookup_index].value_ptr);
+            }();
             _buckets[lookup_index].value_ptr = null;
         }
 
@@ -1104,11 +1143,18 @@ struct HashMap(K, V, Allocator = Mallocator) {
                remove(k);
            }
         }
-        (() @trusted {
-            GC.removeRange(_buckets.ptr);
-            dispose(allocator, _buckets);
-        })();
+        () @trusted {
+            static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+                GC.removeRange(_buckets.ptr);
+            }
+            dispose(allocator, _buckets.ptr);
+        }();
         _buckets = makeArray!(_Bucket)(allocator, _buckets_num);
+        static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+            () @trusted {
+                GC.addRange(&_buckets[0], _buckets_num * _Bucket.sizeof);
+            }();
+        }
         _allocated = _deleted = 0;
         _empty = _buckets_num;
     }

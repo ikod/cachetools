@@ -37,3 +37,13 @@ debug(cachetools) @safe @nogc nothrow
         }
     }    
 }
+
+bool UseGCRanges(T)() {
+    return hasIndirections!T;
+}
+
+bool UseGCRanges(Allocator, T, bool GCRangesAllowed)()
+{
+    import std.experimental.allocator.gc_allocator;
+    return !is(Allocator==GCAllocator) && hasIndirections!T && GCRangesAllowed;
+}

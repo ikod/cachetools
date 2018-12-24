@@ -4,13 +4,16 @@ import std.datetime.stopwatch;
 import std.algorithm, std.range;
 import std.conv;
 import std.experimental.allocator.gc_allocator;
+import std.experimental.allocator.mallocator;
 import core.memory;
+import std.typecons;
+import std.experimental.logger;
 
 // emsi_containers
 import containers.hashmap;
 
 import cachetools.containers.hashmap: CTHashMap = HashMap;
-import cachetools.cache: CacheLRUCT = CacheLRU;
+import cachetools.cache: CacheLRUCT = CacheLRU, Cache2Q;
 import cachetools.hash: hash_function;
 import cachetools.containers.lists;
 
@@ -34,7 +37,6 @@ static this()
         words.insertBack(word.idup);
     }
     f.close();
-    //writeln(words.range());
 }
 
 GC.Stats gcstart, gcstop;
@@ -339,7 +341,6 @@ struct LARGE {
     int i;
     long l;
     double d;
-    string s;
     long l1;
     long l2;
     long l3;
@@ -357,7 +358,32 @@ struct LARGE {
         this.i = i;
         l = i;
         d = i;
-        s = "large struct";// to!string(i);
+    }
+}
+struct LARGE_REF {
+    import std.conv;
+    int i;
+    long l;
+    double d;
+    string s;
+    long l1;
+    long l2;
+    long l3;
+    long l4;
+    hash_t toHash() const nothrow @safe @nogc
+    {
+        return hash_function(i);
+    }
+    bool opEquals(ref const LARGE_REF other) pure const @safe nothrow
+    {
+        return i == other.i;
+    }
+    this(int i) inout @safe @nogc
+    {
+        this.i = i;
+        l = i;
+        d = i;
+        //s = "large struct";// to!string(i);
     }
 }
 class CLASS {
@@ -878,60 +904,192 @@ void test_dlist_emsi_LARGE()
     }
     gcstop = () @trusted {return GC.stats;}();
 }
+// - large with ref
+// --
+void test_dlist_std_LARGE_REF()
+{
+    import std.container.dlist;
+    gcstart = () @trusted {return GC.stats;}();
+    auto list = new DList!LARGE_REF;
+    foreach(i; randw)
+    {
+        list.insertBack(LARGE_REF(i));
+        if (i < iterations/10)
+        {
+            list.removeFront();
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+
+void test_dlist_cachetools_LARGE_REF() @safe
+{
+    import cachetools.containers.lists;
+    gcstart = () @trusted {return GC.stats;}();
+    DList!(LARGE_REF) list;
+    foreach(i; randw)
+    {
+        list.insertBack(LARGE_REF(i));
+        if (i < iterations/10)
+        {
+            list.popFront();
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+
+void test_dlist_cachetools_LARGE_REF_GC() @safe
+{
+    import cachetools.containers.lists;
+    gcstart = () @trusted {return GC.stats;}();
+    DList!(LARGE_REF, GCAllocator) list;
+    foreach(i; randw)
+    {
+        list.insertBack(LARGE_REF(i));
+        if (i < iterations/10)
+        {
+            list.popFront();
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+
+void test_clist_cachetools_LARGE_REF() @safe
+{
+    import cachetools.containers.lists;
+    gcstart = () @trusted {return GC.stats;}();
+    CompressedList!(LARGE_REF) list;
+    foreach(i; randw)
+    {
+        list.insertBack(LARGE_REF(i));
+        if (i < iterations/10)
+        {
+            list.popFront();
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+
+void test_clist_cachetools_LARGE_REF_GC() @safe
+{
+    import cachetools.containers.lists;
+    gcstart = () @trusted {return GC.stats;}();
+    CompressedList!(LARGE_REF, GCAllocator) list;
+    foreach(i; randw)
+    {
+        list.insertBack(LARGE_REF(i));
+        if (i < iterations/10)
+        {
+            list.popFront();
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+
+void test_dlist_emsi_LARGE_REF()
+{
+    import containers.unrolledlist;
+    gcstart = () @trusted {return GC.stats;}();
+    UnrolledList!LARGE_REF list;
+    foreach(i; randw)
+    {
+        list.insertBack(LARGE_REF(i));
+        if (i < iterations/10)
+        {
+            list.popFront();
+        }
+    }
+    gcstop = () @trusted {return GC.stats;}();
+}
+
 
 void test_ct_cache()
 {
     gcstart = () @trusted {return GC.stats;}();
 
-    auto c = new CacheLRUCT!(int, int);
-    c.size = iterations;
-
-    // fill cache with randw
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        c.put(k, i);
+    auto c = new CacheLRUCT!(string, int);
+    c.size = 1024;
+    hits = 0;
+    foreach(_;0..2)
+    foreach(w;words.range()) {
+        Nullable!int v;
+        v = c.get(w);
+        if ( !v.isNull  )
+        {
+            hits++;
+            continue;
+        }
+        c.put(w, 1);
     }
 
-    // update all cached values
-    foreach(i; 0..iterations) {
-        int k = randw[i];
-        auto v = c.get(k);
-        c.put(k, ++v);
-    }
-    // purge values by adding randr
-    foreach(i; 0..iterations) {
-        int k = randr[i];
-        c.put(k + iterations, i);
-    }
     gcstop = () @trusted {return GC.stats;} ();
 }
 
-void test_ct_cache_gc()
+void test_ct_cache_gc() @safe
 {
     gcstart = () @trusted {return GC.stats;}();
 
-    auto c = new CacheLRUCT!(int, int, GCAllocator);
-    c.size = iterations;
-
-    // fill cache with randw
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        c.put(k, i);
-    }
-
-    // update all cached values
-    foreach(i; 0..iterations) {
-        int k = randw[i];
-        auto v = c.get(k);
-        c.put(k, ++v);
-    }
-    // purge values by adding randr
-    foreach(i; 0..iterations) {
-        int k = randr[i];
-        c.put(k + iterations, i);
+    auto c = new CacheLRUCT!(string, int, GCAllocator);
+    c.size = 1024;
+    hits = 0;
+    foreach(_;0..2)
+    foreach(w;words.range()) {
+        Nullable!int v;
+        v = c.get(w);
+        if ( !v.isNull  )
+        {
+            hits++;
+            continue;
+        }
+        c.put(w, 1);
     }
     gcstop = () @trusted {return GC.stats;} ();
 }
+
+void test_2q_cache()
+{
+    gcstart = () @trusted {return GC.stats;}();
+
+    auto c = new Cache2Q!(string, int);
+    c.size = 1024;
+    hits = 0;
+    foreach(_;0..2)
+    foreach(w; words.range()) {
+        Nullable!int v;
+        v = c.get(w);
+        if ( !v.isNull  )
+        {
+            hits++;
+            continue;
+        }
+        c.put(w, 1);
+    }
+
+    gcstop = () @trusted {return GC.stats;} ();
+}
+
+void test_2q_gc_cache() @safe
+{
+    gcstart = () @trusted {return GC.stats;}();
+
+    auto c = new Cache2Q!(string, int, GCAllocator);
+    c.size = 1024;
+    hits = 0;
+    foreach(_;0..2)
+    foreach(w; words.range()) {
+        Nullable!int v;
+        v = c.get(w);
+        if ( !v.isNull  )
+        {
+            hits++;
+            continue;
+        }
+        c.put(w, 1);
+    }
+
+    gcstop = () @trusted {return GC.stats;} ();
+}
+
 
 void main()
 {
@@ -941,7 +1099,8 @@ void main()
     globalLogLevel = LogLevel.info;
     string test;
     Duration[1] r;
-    string fmt = "|%-11.11s | %-31.31s | GC memory Δ %dMB|";
+    string fmt  = "|%-11.11s | %-31.31s | GC memory Δ %6.2f MB|";
+    string fmth = "|%-11.11s | %-31.31s | GC memory Δ %6.2f MB| hits %.2f|";
 
     writeln("\n", center(" Test inserts and lookups int[int] ", 50, ' '));
     writeln(      center(" ================================= ", 50, ' '));
@@ -949,17 +1108,17 @@ void main()
     GC.collect();GC.minimize();
     test = "std";
     r = benchmark!(f_AA)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.";
     r = benchmark!(f_oahashmap)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.+GC";
     r = benchmark!(f_oahashmapGC)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     version(Posix)
     {
@@ -967,7 +1126,7 @@ void main()
         GC.collect();GC.minimize();
         test = "emsi";
         r = benchmark!(f_hashmap)(trials);
-        writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+        writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
     }
 
     writeln("\n", center(" Test scan ", 50, ' '));
@@ -976,12 +1135,12 @@ void main()
     GC.collect();GC.minimize();
     test = "std";
     r = benchmark!(f_aahashmapscan)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.";
     r = benchmark!(f_oahashmapscan)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
     
     
     writeln("\n", center(" Test insert, remove, lookup for int[int]", 50, ' '));
@@ -990,17 +1149,17 @@ void main()
     GC.collect();GC.minimize();
     test = "std";
     r = benchmark!(f_AA_remove)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.";
     r = benchmark!(f_oahashmap_remove)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.+GC";
     r = benchmark!(f_oahashmapGC_remove)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     version(Posix)
     {
@@ -1008,7 +1167,7 @@ void main()
         GC.collect();GC.minimize();
         test = "emsi";
         r = benchmark!(f_hashmap_remove)(trials);
-        writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+        writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
     }
 
     writeln("\n", center(" Test inserts and lookups for struct[int] ", 50, ' '));
@@ -1017,17 +1176,17 @@ void main()
     GC.collect();GC.minimize();
     test = "std";
     r = benchmark!(LARGE_AA)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.";
     r = benchmark!(OALARGE)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.+GC";
     r = benchmark!(OALARGE_GC)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     version(Posix)
     {
@@ -1035,7 +1194,7 @@ void main()
         GC.collect();GC.minimize();
         test = "emsi";
         r = benchmark!(HMLARGE)(trials);
-        writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+        writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
     }
 
     writeln("\n", center(" Test inserts and lookups for int[struct] ", 50, ' '));
@@ -1044,17 +1203,17 @@ void main()
     GC.collect();GC.minimize();
     test = "std";
     r = benchmark!(structkey_AA)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.";
     r = benchmark!(structkey_OA)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.+GC";
     r = benchmark!(structkey_OAGC)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     version(Posix)
     {
@@ -1062,7 +1221,7 @@ void main()
         // GC.collect();GC.minimize();
         // test = "emsi";
         // r = benchmark!(structkey_emsi)(trials);
-        // writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+        // writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
     }
 
     writeln("\n", center(" Test inserts and lookups for int[class] ", 50, ' '));
@@ -1071,17 +1230,17 @@ void main()
     GC.collect();GC.minimize();
     test = "std";
     r = benchmark!(classkey_AA)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.";
     r = benchmark!(classkey_OA)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.+GC";
     r = benchmark!(structkey_OAGC)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     // emsi wont compile with immutable class
     //version(Posix)
@@ -1089,7 +1248,7 @@ void main()
     //    GC.collect();GC.minimize();
     //    test = "emsi";
     //    r = benchmark!(classkey_emsi)(trials);
-    //    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    //    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
     //}
 
 
@@ -1099,17 +1258,17 @@ void main()
     GC.collect();GC.minimize();
     test = "std";
     r = benchmark!shakespeare_std(1);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.";
     r = benchmark!shakespeare_OAHashMap(1);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.+GC";
     r = benchmark!shakespeare_OAHashMapGC(1);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     version(Posix)
     {
@@ -1117,13 +1276,13 @@ void main()
         GC.collect();GC.minimize();
         test = "emsi  ";
         r = benchmark!shakespeare_HashMap(1);
-        writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+        writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
     }
 
     GC.collect();GC.minimize();
     test = "correctness";
     r = benchmark!test_integrity(1);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
 
     writeln("\n", center(" Test double-linked list DList!int ", 50, ' '));
@@ -1132,32 +1291,32 @@ void main()
     GC.collect();GC.minimize();
     test = "std";
     r = benchmark!(test_dlist_std)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.";
     r = benchmark!(test_dlist_cachetools)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.+GC";
     r = benchmark!(test_dlist_cachetools_GC)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.unroll";
     r = benchmark!(test_clist_cachetools)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.unr+GC";
     r = benchmark!(test_clist_cachetoolsGC)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "emsiunroll";
     r = benchmark!(test_dlist_emsi)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
 
     writeln("\n", center(" Test single-linked list SList!int ", 50, ' '));
@@ -1166,22 +1325,22 @@ void main()
     GC.collect();GC.minimize();
     test = "std";
     r = benchmark!(test_slist_std)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.";
     r = benchmark!(test_slist_cachetools)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.+GC";
     r = benchmark!(test_slist_cachetools_GC)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "emsi";
     r = benchmark!(test_slist_emsi)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
 
     writeln("\n", center(" Test double-linked list of structs ", 50, ' '));
@@ -1190,42 +1349,87 @@ void main()
     GC.collect();GC.minimize();
     test = "std";
     r = benchmark!(test_dlist_std_LARGE)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.";
     r = benchmark!(test_dlist_cachetools_LARGE)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.+GC";
     r = benchmark!(test_dlist_cachetools_LARGE_GC)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.unr";
     r = benchmark!(test_clist_cachetools_LARGE)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "c.t.unr+GC";
     r = benchmark!(test_clist_cachetools_LARGE_GC)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     GC.collect();GC.minimize();
     test = "emsi";
     r = benchmark!(test_dlist_emsi_LARGE)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    writeln("\n", center(" Test double-linked list of structs with ref ", 50, ' '));
+    writeln(      center(" =========================================== ", 50, ' '));
+
+    GC.collect();GC.minimize();
+    test = "std";
+    r = benchmark!(test_dlist_std_LARGE_REF)(trials);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "c.t.";
+    r = benchmark!(test_dlist_cachetools_LARGE_REF)(trials);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "c.t.+GC";
+    r = benchmark!(test_dlist_cachetools_LARGE_REF_GC)(trials);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "c.t.unr";
+    r = benchmark!(test_clist_cachetools_LARGE_REF)(trials);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "c.t.unr+GC";
+    r = benchmark!(test_clist_cachetools_LARGE_REF_GC)(trials);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
+
+    GC.collect();GC.minimize();
+    test = "emsi";
+    r = benchmark!(test_dlist_emsi_LARGE_REF)(trials);
+    writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
 
     writeln("\n", center(" Test cache ", 50, ' '));
     writeln(      center(" ========== ", 50, ' '));
 
     test = "c.t";
+    GC.collect();GC.minimize();
     r = benchmark!(test_ct_cache)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmth, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024, (1e0*hits)/words.length/2);
 
     test = "c.t+GC";
+    GC.collect();GC.minimize();
     r = benchmark!(test_ct_cache_gc)(trials);
-    writefln(fmt, test, to!string(r[0]), (gcstop.usedSize - gcstart.usedSize)/1024/1024);
+    writefln(fmth, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024, (1e0*hits)/words.length/2);
 
+    globalLogLevel = LogLevel.trace;
+    test = "2Q";
+    GC.collect();GC.minimize();
+    r = benchmark!(test_2q_cache)(trials);
+    writefln(fmth, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024, (1e0*hits)/words.length/2);
+
+    test = "2Q+GC";
+    GC.collect();GC.minimize();
+    r = benchmark!(test_2q_gc_cache)(trials);
+    writefln(fmth, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024, (1e0*hits)/words.length/2);
 }
