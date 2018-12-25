@@ -105,14 +105,8 @@ struct MultiDList(T, int N, Allocator = Mallocator, bool GCRangesAllowed = true)
         {
             n.links[i].prev.links[i].next = n.links[i].next;
         }
-        if ( n.links[i].next is null )
-        {
-            _tails[i] = n.links[i].prev;
-        }
-        else
-        {
-            n.links[i].next.links[i].prev = n.links[i].prev;
-        }
+        n.links[i].next.links[i].prev = n.links[i].prev;
+
         // insert back
         if ( _heads[i] is null ) {
             _heads[i] = n;
@@ -449,14 +443,7 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         {
             n.prev.next = n.next;
         }
-        if ( n.next is null )
-        {
-            _tail = n.prev;
-        }
-        else
-        {
-            n.next.prev = n.prev;
-        }
+        n.next.prev = n.prev;
         // insert back
         if ( _head is null ) {
             _head = n;
@@ -484,14 +471,7 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
             return;
         }
         // unlink
-        if ( n.prev is null )
-        {
-            _head = n.next;
-        }
-        else
-        {
-            n.prev.next = n.next;
-        }
+        n.prev.next = n.next;
         if ( n.next is null )
         {
             _tail = n.prev;
@@ -1448,6 +1428,9 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
 @safe unittest
 {
     import std.experimental.logger;
+    import std.algorithm;
+    import std.range;
+
     globalLogLevel = LogLevel.info;
     CompressedList!int list;
     foreach(i;0..66)
@@ -1500,6 +1483,18 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
         assert(list.back == 99);
         list.remove(p99);
         assert(list.length == 0);
+
+        foreach(i;0..1000)
+        {
+            list.insertBack(i);
+        }
+        assert(equal(list.range(), iota(0,1000)));
+        list.clear();
+
+        iota(0, 1000).
+            map!(i => list.insertBack(i)).
+            each!(p => list.remove(p));
+        assert(list.empty);
     }();
 
     () @nogc
@@ -1528,4 +1523,5 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
     }
     assert(clist.length == 500);
     clist.clear();
+    
 }
