@@ -19,323 +19,10 @@ import cachetools.containers.lists;
 
 immutable iterations = 1_000_000;
 immutable trials = 1;
-int hits;
-
-int[iterations] randw, randr;
-CompressedList!(string) words;
-
-static this()
-{
-    auto rnd = Random(unpredictableSeed);
-    foreach(i;0..iterations)
-    {
-        randw[i] = uniform(0, iterations, rnd);
-        randr[i] = uniform(0, iterations, rnd);
-    }
-    auto f = File("t8.shakespeare.txt", "r");
-    foreach(word; f.byLine.map!splitter.joiner) {
-        words.insertBack(word.idup);
-    }
-    f.close();
-}
 
 GC.Stats gcstart, gcstop;
 
-void f_AA() @safe {
-    gcstart = () @trusted {return GC.stats;}();
 
-    int[int] c;
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        c[k] = i;
-    }
-
-    foreach(i; 0..iterations) {
-        int k = randr[i];
-        auto v = k in c;
-        if ( v ) {
-            hits++;
-        }
-    }
-    gcstop = () @trusted {return GC.stats;} ();
-}
-
-void f_oahashmap() @safe {
-    gcstart = () @trusted {return GC.stats;}();
-
-    CTHashMap!(int, int) c;
-
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        c.put(k, i);
-    }
-
-    foreach(i; 0..iterations) {
-        int k = randr[i];
-        auto v = k in c;
-        if ( v ) {
-            hits++;
-        }
-    }
-    gcstop = () @trusted {return GC.stats;} ();
-}
-
-void f_oahashmapGC() @safe {
-    gcstart = () @trusted {return GC.stats;}();
-
-    CTHashMap!(int, int, GCAllocator) c;
-
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        c.put(k, i);
-    }
-
-    foreach(i; 0..iterations) {
-        int k = randr[i];
-        auto v = k in c;
-        if ( v ) {
-            hits++;
-        }
-    }
-    gcstop = () @trusted {return GC.stats;} ();
-}
-
-
-void f_hashmap() {
-    gcstart = () @trusted {return GC.stats;}();
-
-    HashMap!(int, int) c;
-
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        c[k] = i;
-    }
-
-    foreach(i; 0..iterations) {
-        int k = randr[i];
-        auto v = k in c;
-        if ( v ) {
-            hits++;
-        }
-    }
-    gcstop = () @trusted {return GC.stats;} ();
-}
-
-
-void f_aahashmapscan() @safe {
-    gcstart = () @trusted {return GC.stats;}();
-
-    int[int] c;
-
-    foreach(k;0..10)
-        foreach(i;0..iterations) {
-            c[i]= i;
-            c.remove(i-50000);
-            if ( randw[i] in c)
-            {
-                ++hits;
-            }
-        }
-
-    gcstop = () @trusted {return GC.stats;} ();
-}
-void f_oahashmapscan() @safe {
-    gcstart = () @trusted {return GC.stats;}();
-
-    CTHashMap!(int, int) c;
-
-    foreach(k;0..10)
-        foreach(i;0..iterations) {
-            c.put(i, i);
-            c.remove(i-50000);
-            if ( randw[i] in c)
-            {
-                ++hits;
-            }
-        }
-
-    gcstop = () @trusted {return GC.stats;} ();
-}
-
-void f_AA_remove() @safe {
-    gcstart = () @trusted {return GC.stats;}();
-
-    int[int] c;
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        c[k] = i;
-    }
-
-    foreach(i; 0..iterations) {
-        int k = randr[i];
-        c.remove(k);
-    }
-    foreach(i; 0..iterations) {
-        int k = randw[i];
-        auto v = k in c;
-    }
-    gcstop = () @trusted {return GC.stats;} ();
-}
-void f_oahashmapGC_remove() @safe {
-    gcstart = () @trusted {return GC.stats;}();
-
-    CTHashMap!(int, int, GCAllocator) c;
-
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        c.put(k, i);
-    }
-
-    foreach(i; 0..iterations) {
-        int k = randr[i];
-        c.remove(k);
-    }
-    foreach(i; 0..iterations) {
-        int k = randw[i];
-        auto v = k in c;
-    }
-    gcstop = () @trusted {return GC.stats;} ();
-}
-void f_oahashmap_remove() @safe {
-    gcstart = () @trusted {return GC.stats;}();
-
-    CTHashMap!(int, int) c;
-
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        c.put(k, i);
-    }
-
-    foreach(i; 0..iterations) {
-        int k = randr[i];
-        c.remove(k);
-    }
-    foreach(i; 0..iterations) {
-        int k = randw[i];
-        auto v = k in c;
-    }
-    gcstop = () @trusted {return GC.stats;} ();
-}
-
-void f_hashmap_remove() {
-    gcstart = () @trusted {return GC.stats;}();
-
-    HashMap!(int, int) c;
-
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        c[k] = i;
-    }
-
-    foreach(i; 0..iterations) {
-        int k = randr[i];
-        c.remove(k);
-    }
-    foreach(i; 0..iterations) {
-        int k = randw[i];
-        auto v = k in c;
-    }
-    gcstop = () @trusted {return GC.stats;} ();
-}
-
-void shakespeare_std()
-{
-    gcstart = () @trusted {return GC.stats;} ();
-
-    int[string] count;
-    void updateCount(string word) {
-        auto ptr = word in count;
-        if (!ptr)
-            count[word] = 1;
-        else
-            (*ptr)++;
-    }
-    foreach(word; words.range()) {
-        updateCount(word);
-    }
-    gcstop = () @trusted {return GC.stats;} ();
-}
-void shakespeare_OAHashMap()
-{
-    gcstart = () @trusted {return GC.stats;} ();
-
-    CTHashMap!(string, int) count;
-
-    void updateCount(string word) {
-        count.getOrAdd(word, 0)++;
-    }
-
-    foreach(word; words.range()) {
-          updateCount(word);
-    }
-    gcstop = () @trusted {return GC.stats;} ();
-}
-
-void shakespeare_OAHashMapGC()
-{
-    gcstart = () @trusted {return GC.stats;} ();
-
-    CTHashMap!(string, int, GCAllocator) count;
-
-    void updateCount(string word) {
-        count.getOrAdd(word, 0)++;
-    }
-
-    foreach(word; words.range()) {
-          updateCount(word);
-    }
-    gcstop = () @trusted {return GC.stats;} ();
-}
-
-void shakespeare_HashMap()
-{
-    gcstart = () @trusted {return GC.stats;} ();
-
-    HashMap!(string, int) count;
-
-    void updateCount(string word) {
-        auto ptr = word in count;
-        if (!ptr)
-            count[word] = 1;
-        else
-            (*ptr)++;
-    }
-
-    foreach(word; words.range()) {
-          updateCount(word);
-    }
-    gcstop = () @trusted {return GC.stats;} ();
-}
-
-void test_integrity()
-{
-    int[string] stdcount;
-    void updateStdCount(string word) {
-        auto ptr = word in stdcount;
-        if (!ptr)
-            stdcount[word] = 1;
-        else
-            (*ptr)++;
-    }
-    foreach(word; words.range()) {
-        updateStdCount(word);
-    }
-
-    CTHashMap!(string, int) mycount;
-
-    void updateMyCount(string word) {
-        mycount.getOrAdd(word, 0)++;
-    }
-
-    foreach(word; words.range()) {
-        updateMyCount(word);
-    }
-    assert(stdcount.length == mycount.length);
-    foreach(pair; mycount.byPair)
-    {
-        assert(pair.value == stdcount[pair.key]);
-    }
-}
 struct LARGE {
     import std.conv;
     int i;
@@ -412,222 +99,6 @@ class CLASS {
         s = "large class";// to!string(i);
     }
 }
-void LARGE_AA() @safe {
-    gcstart = () @trusted {return GC.stats;}();
-
-    LARGE[int] c;
-
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        c[k] = LARGE(i);
-    }
-
-    foreach(i; 0..iterations) {
-        int k = randr[i];
-        auto v = k in c;
-        if ( v ) {
-            hits++;
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-void OALARGE() @safe {
-    gcstart = () @trusted {return GC.stats;}();
-
-    CTHashMap!(int, LARGE) c;
-
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        c.put(k, LARGE(i));
-    }
-
-    foreach(i; 0..iterations) {
-        int k = randr[i];
-        auto v = k in c;
-        if ( v ) {
-            hits++;
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-void OALARGE_GC() @safe {
-    gcstart = () @trusted {return GC.stats;}();
-
-    CTHashMap!(int, LARGE, GCAllocator) c;
-
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        c.put(k, LARGE(i));
-    }
-
-    foreach(i; 0..iterations) {
-        int k = randr[i];
-        auto v = k in c;
-        if ( v ) {
-            hits++;
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-void HMLARGE() {
-    gcstart = () @trusted {return GC.stats;}();
-
-    HashMap!(int, LARGE) c;
-
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        c[k] = LARGE(i);
-    }
-
-    foreach(i; 0..iterations) {
-        int k = randr[i];
-        auto v = k in c;
-        if ( v ) {
-            hits++;
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-
-void structkey_AA() @safe {
-    gcstart = () @trusted {return GC.stats;}();
-
-    int[immutable LARGE] c;
-
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        c[LARGE(k)] = k;
-    }
-
-    foreach(i; 0..iterations) {
-        immutable k = immutable LARGE(randr[i]);
-        auto v = k in c;
-        if ( v ) {
-            hits++;
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-void structkey_OA() @safe {
-    gcstart = () @trusted {return GC.stats;}();
-
-    CTHashMap!(immutable LARGE, int) c;
-
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        c[LARGE(k)] = k;
-    }
-
-    foreach(i; 0..iterations) {
-        immutable k = immutable LARGE(randr[i]);
-        auto v = k in c;
-        if ( v ) {
-            hits++;
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-void structkey_OAGC() @safe {
-    gcstart = () @trusted {return GC.stats;}();
-
-    CTHashMap!(immutable LARGE, int, GCAllocator) c;
-
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        c[LARGE(k)] = k;
-    }
-
-    foreach(i; 0..iterations) {
-        immutable k = immutable LARGE(randr[i]);
-        auto v = k in c;
-        if ( v ) {
-            hits++;
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-void structkey_emsi()
-{
-    gcstart = () @trusted {return GC.stats;}();
-
-    HashMap!(immutable LARGE, int) c;
-
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        c[LARGE(k)] = k;
-    }
-
-    foreach(i; 0..iterations) {
-        immutable k = immutable LARGE(randr[i]);
-        auto v = k in c;
-        if ( v ) {
-            hits++;
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-
-void classkey_AA() @safe {
-    gcstart = () @trusted {return GC.stats;}();
-
-    int[immutable CLASS] c;
-
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        immutable key = new immutable CLASS(k);
-        c[key] = i;
-    }
-
-    foreach(i; 0..iterations) {
-        immutable k = new immutable CLASS(randr[i]);
-        auto v = k in c;
-        if ( v ) {
-            hits++;
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-void classkey_OA() @safe {
-    gcstart = () @trusted {return GC.stats;}();
-
-    CTHashMap!(immutable CLASS, int) c;
-
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        immutable key = new immutable CLASS(k);
-        c[key] = i;
-    }
-
-    foreach(i; 0..iterations) {
-        immutable k = new immutable CLASS(randr[i]);
-        auto v = k in c;
-        if ( v ) {
-            hits++;
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-void classkey_OAGC() @safe
-{
-    gcstart = () @trusted {return GC.stats;}();
-
-    CTHashMap!(immutable CLASS, int, GCAllocator) c;
-
-    foreach(i;0..iterations) {
-        int k = randw[i];
-        immutable key = new immutable CLASS(k);
-        c[key] = i;
-    }
-
-    foreach(i; 0..iterations) {
-        immutable k = new immutable CLASS(randr[i]);
-        auto v = k in c;
-        if ( v ) {
-            hits++;
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
 //void classkey_emsi()
 //{
 //    gcstart = () @trusted {return GC.stats;}();
@@ -651,444 +122,8 @@ void classkey_OAGC() @safe
 //}
 
 
-void test_dlist_std()
-{
-    import std.container.dlist;
-    gcstart = () @trusted {return GC.stats;}();
-    auto intList = new DList!int;
-    foreach(i; randw)
-    {
-        intList.insertBack(i);
-        if (i < iterations/10)
-        {
-            intList.removeFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-
-void test_slist_std()
-{
-    import std.container.slist;
-    gcstart = () @trusted {return GC.stats;}();
-    auto intList = new SList!int;
-    foreach(i; randw)
-    {
-        intList.insertFront(i);
-        if (i < iterations/10)
-        {
-            intList.removeFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-
-void test_dlist_cachetools() @safe
-{
-    import cachetools.containers.lists;
-    gcstart = () @trusted {return GC.stats;}();
-    DList!int intList;
-    foreach(i; randw)
-    {
-        intList.insert_last(i);
-        if (i < iterations/10)
-        {
-            intList.popFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-void test_slist_cachetools() @safe
-{
-    import cachetools.containers.lists;
-    gcstart = () @trusted {return GC.stats;}();
-    SList!int intList;
-    foreach(i; randw)
-    {
-        intList.insertFront(i);
-        if (i < iterations/10)
-        {
-            intList.popFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-
-void test_dlist_cachetools_GC() @safe
-{
-    import cachetools.containers.lists;
-    gcstart = () @trusted {return GC.stats;}();
-    DList!(int, GCAllocator) intList;
-    foreach(i; randw)
-    {
-        intList.insert_last(i);
-        if (i < iterations/10)
-        {
-            intList.popFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-void test_slist_cachetools_GC() @safe
-{
-    import cachetools.containers.lists;
-    gcstart = () @trusted {return GC.stats;}();
-    SList!(int, GCAllocator) intList;
-    foreach(i; randw)
-    {
-        intList.insertFront(i);
-        if (i < iterations/10)
-        {
-            intList.popFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-
-void test_clist_cachetools() @safe
-{
-    import cachetools.containers.lists;
-    gcstart = () @trusted {return GC.stats;}();
-    CompressedList!int intList;
-    foreach(i; randw)
-    {
-        intList.insertFront(i);
-        if (i < iterations/10)
-        {
-            intList.popFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-
-void test_clist_cachetoolsGC() @safe
-{
-    import cachetools.containers.lists;
-    gcstart = () @trusted {return GC.stats;}();
-    CompressedList!(int, GCAllocator) intList;
-    foreach(i; randw)
-    {
-        intList.insertFront(i);
-        if (i < iterations/10)
-        {
-            intList.popFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-
-void test_dlist_emsi()
-{
-    import containers.unrolledlist;
-    gcstart = () @trusted {return GC.stats;}();
-    UnrolledList!int intList;
-    foreach(i; randw)
-    {
-        intList.insertBack(i);
-        if (i < iterations/10)
-        {
-            intList.popFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-void test_slist_emsi()
-{
-    import containers.slist: SList;
-    gcstart = () @trusted {return GC.stats;}();
-    SList!int intList;
-    foreach(i; randw)
-    {
-        intList.insertFront(i);
-        if (i < iterations/10)
-        {
-            intList.popFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-
-// --
-void test_dlist_std_LARGE()
-{
-    import std.container.dlist;
-    gcstart = () @trusted {return GC.stats;}();
-    auto list = new DList!LARGE;
-    foreach(i; randw)
-    {
-        list.insertBack(LARGE(i));
-        if (i < iterations/10)
-        {
-            list.removeFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-
-void test_dlist_cachetools_LARGE() @safe
-{
-    import cachetools.containers.lists;
-    gcstart = () @trusted {return GC.stats;}();
-    DList!LARGE list;
-    foreach(i; randw)
-    {
-        list.insert_last(LARGE(i));
-        if (i < iterations/10)
-        {
-            list.popFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-
-void test_dlist_cachetools_LARGE_GC() @safe
-{
-    import cachetools.containers.lists;
-    gcstart = () @trusted {return GC.stats;}();
-    DList!(LARGE, GCAllocator) list;
-    foreach(i; randw)
-    {
-        list.insert_last(LARGE(i));
-        if (i < iterations/10)
-        {
-            list.popFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-
-void test_clist_cachetools_LARGE() @safe
-{
-    import cachetools.containers.lists;
-    gcstart = () @trusted {return GC.stats;}();
-    CompressedList!(LARGE) list;
-    foreach(i; randw)
-    {
-        list.insertBack(LARGE(i));
-        if (i < iterations/10)
-        {
-            list.popFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-
-void test_clist_cachetools_LARGE_GC() @safe
-{
-    import cachetools.containers.lists;
-    gcstart = () @trusted {return GC.stats;}();
-    CompressedList!(LARGE, GCAllocator) list;
-    foreach(i; randw)
-    {
-        list.insertBack(LARGE(i));
-        if (i < iterations/10)
-        {
-            list.popFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-
-void test_dlist_emsi_LARGE()
-{
-    import containers.unrolledlist;
-    gcstart = () @trusted {return GC.stats;}();
-    UnrolledList!LARGE list;
-    foreach(i; randw)
-    {
-        list.insertBack(LARGE(i));
-        if (i < iterations/10)
-        {
-            list.popFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-// - large with ref
-// --
-void test_dlist_std_LARGE_REF()
-{
-    import std.container.dlist;
-    gcstart = () @trusted {return GC.stats;}();
-    auto list = new DList!LARGE_REF;
-    foreach(i; randw)
-    {
-        list.insertBack(LARGE_REF(i));
-        if (i < iterations/10)
-        {
-            list.removeFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-
-void test_dlist_cachetools_LARGE_REF() @safe
-{
-    import cachetools.containers.lists;
-    gcstart = () @trusted {return GC.stats;}();
-    DList!(LARGE_REF) list;
-    foreach(i; randw)
-    {
-        list.insertBack(LARGE_REF(i));
-        if (i < iterations/10)
-        {
-            list.popFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-
-void test_dlist_cachetools_LARGE_REF_GC() @safe
-{
-    import cachetools.containers.lists;
-    gcstart = () @trusted {return GC.stats;}();
-    DList!(LARGE_REF, GCAllocator) list;
-    foreach(i; randw)
-    {
-        list.insertBack(LARGE_REF(i));
-        if (i < iterations/10)
-        {
-            list.popFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-
-void test_clist_cachetools_LARGE_REF() @safe
-{
-    import cachetools.containers.lists;
-    gcstart = () @trusted {return GC.stats;}();
-    CompressedList!(LARGE_REF) list;
-    foreach(i; randw)
-    {
-        list.insertBack(LARGE_REF(i));
-        if (i < iterations/10)
-        {
-            list.popFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-
-void test_clist_cachetools_LARGE_REF_GC() @safe
-{
-    import cachetools.containers.lists;
-    gcstart = () @trusted {return GC.stats;}();
-    CompressedList!(LARGE_REF, GCAllocator) list;
-    foreach(i; randw)
-    {
-        list.insertBack(LARGE_REF(i));
-        if (i < iterations/10)
-        {
-            list.popFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
-
-void test_dlist_emsi_LARGE_REF()
-{
-    import containers.unrolledlist;
-    gcstart = () @trusted {return GC.stats;}();
-    UnrolledList!LARGE_REF list;
-    foreach(i; randw)
-    {
-        list.insertBack(LARGE_REF(i));
-        if (i < iterations/10)
-        {
-            list.popFront();
-        }
-    }
-    gcstop = () @trusted {return GC.stats;}();
-}
 
 
-void test_ct_cache()
-{
-    gcstart = () @trusted {return GC.stats;}();
-
-    auto c = new CacheLRUCT!(string, int);
-    c.size = 1024;
-    hits = 0;
-    foreach(_;0..2)
-    foreach(w;words.range()) {
-        Nullable!int v;
-        v = c.get(w);
-        if ( !v.isNull  )
-        {
-            hits++;
-            continue;
-        }
-        c.put(w, 1);
-    }
-
-    gcstop = () @trusted {return GC.stats;} ();
-}
-
-void test_ct_cache_gc() @safe
-{
-    gcstart = () @trusted {return GC.stats;}();
-
-    auto c = new CacheLRUCT!(string, int, GCAllocator);
-    c.size = 1024;
-    hits = 0;
-    foreach(_;0..2)
-    foreach(w;words.range()) {
-        Nullable!int v;
-        v = c.get(w);
-        if ( !v.isNull  )
-        {
-            hits++;
-            continue;
-        }
-        c.put(w, 1);
-    }
-    gcstop = () @trusted {return GC.stats;} ();
-}
-
-void test_2q_cache()
-{
-    gcstart = () @trusted {return GC.stats;}();
-
-    auto c = new Cache2Q!(string, int);
-    c.size = 1024;
-    hits = 0;
-    foreach(_;0..2)
-    foreach(w; words.range()) {
-        Nullable!int v;
-        v = c.get(w);
-        if ( !v.isNull  )
-        {
-            hits++;
-            continue;
-        }
-        c.put(w, 1);
-    }
-
-    gcstop = () @trusted {return GC.stats;} ();
-}
-
-void test_2q_gc_cache() @safe
-{
-    gcstart = () @trusted {return GC.stats;}();
-
-    auto c = new Cache2Q!(string, int, GCAllocator);
-    c.size = 1024;
-    hits = 0;
-    foreach(_;0..2)
-    foreach(w; words.range()) {
-        Nullable!int v;
-        v = c.get(w);
-        if ( !v.isNull  )
-        {
-            hits++;
-            continue;
-        }
-        c.put(w, 1);
-    }
-
-    gcstop = () @trusted {return GC.stats;} ();
-}
 
 
 void main()
@@ -1099,6 +134,974 @@ void main()
     globalLogLevel = LogLevel.info;
     string test;
     Duration[1] r;
+
+    int hits;
+    int[iterations] randw, randr;
+
+    auto rnd = Random(unpredictableSeed);
+    foreach(i;0..iterations)
+    {
+        randw[i] = uniform(0, iterations, rnd);
+        randr[i] = uniform(0, iterations, rnd);
+    }
+
+    CompressedList!(string) words;
+    auto f = File("t8.shakespeare.txt", "r");
+    foreach(word; f.byLine.map!splitter.joiner) {
+        words.insertBack(word.idup);
+    }
+    f.close();
+
+
+    void f_AA() @safe {
+        gcstart = () @trusted {return GC.stats;}();
+
+        int[int] c;
+        foreach(i;0..iterations) {
+            int k = randw[i];
+            c[k] = i;
+        }
+
+        foreach(i; 0..iterations) {
+            int k = randr[i];
+            auto v = k in c;
+            if ( v ) {
+                hits++;
+            }
+        }
+        gcstop = () @trusted {return GC.stats;} ();
+    }
+    void f_oahashmap() @safe {
+        gcstart = () @trusted {return GC.stats;}();
+
+        CTHashMap!(int, int) c;
+
+        foreach(i;0..iterations) {
+            int k = randw[i];
+            c.put(k, i);
+        }
+
+        foreach(i; 0..iterations) {
+            int k = randr[i];
+            auto v = k in c;
+            if ( v ) {
+                hits++;
+            }
+        }
+        gcstop = () @trusted {return GC.stats;} ();
+    }
+
+    void f_oahashmapGC() @safe {
+        gcstart = () @trusted {return GC.stats;}();
+
+        CTHashMap!(int, int, GCAllocator) c;
+
+        foreach(i;0..iterations) {
+            int k = randw[i];
+            c.put(k, i);
+        }
+
+        foreach(i; 0..iterations) {
+            int k = randr[i];
+            auto v = k in c;
+            if ( v ) {
+                hits++;
+            }
+        }
+        gcstop = () @trusted {return GC.stats;} ();
+    }
+
+
+    void f_hashmap() {
+        gcstart = () @trusted {return GC.stats;}();
+
+        HashMap!(int, int) c;
+
+        foreach(i;0..iterations) {
+            int k = randw[i];
+            c[k] = i;
+        }
+
+        foreach(i; 0..iterations) {
+            int k = randr[i];
+            auto v = k in c;
+            if ( v ) {
+                hits++;
+            }
+        }
+        gcstop = () @trusted {return GC.stats;} ();
+    }
+
+
+    void f_aahashmapscan() @safe {
+        gcstart = () @trusted {return GC.stats;}();
+
+        int[int] c;
+
+        foreach(k;0..10)
+            foreach(i;0..iterations) {
+                c[i]= i;
+                c.remove(i-50000);
+                if ( randw[i] in c)
+                {
+                    ++hits;
+                }
+            }
+
+        gcstop = () @trusted {return GC.stats;} ();
+    }
+    void f_oahashmapscan() @safe {
+        gcstart = () @trusted {return GC.stats;}();
+
+        CTHashMap!(int, int) c;
+
+        foreach(k;0..10)
+            foreach(i;0..iterations) {
+                c.put(i, i);
+                c.remove(i-50000);
+                if ( randw[i] in c)
+                {
+                    ++hits;
+                }
+            }
+
+        gcstop = () @trusted {return GC.stats;} ();
+    }
+
+    void f_AA_remove() @safe {
+        gcstart = () @trusted {return GC.stats;}();
+
+        int[int] c;
+        foreach(i;0..iterations) {
+            int k = randw[i];
+            c[k] = i;
+        }
+
+        foreach(i; 0..iterations) {
+            int k = randr[i];
+            c.remove(k);
+        }
+        foreach(i; 0..iterations) {
+            int k = randw[i];
+            auto v = k in c;
+        }
+        gcstop = () @trusted {return GC.stats;} ();
+    }
+    void f_oahashmapGC_remove() @safe {
+        gcstart = () @trusted {return GC.stats;}();
+
+        CTHashMap!(int, int, GCAllocator) c;
+
+        foreach(i;0..iterations) {
+            int k = randw[i];
+            c.put(k, i);
+        }
+
+        foreach(i; 0..iterations) {
+            int k = randr[i];
+            c.remove(k);
+        }
+        foreach(i; 0..iterations) {
+            int k = randw[i];
+            auto v = k in c;
+        }
+        gcstop = () @trusted {return GC.stats;} ();
+    }
+    void f_oahashmap_remove() @safe {
+        gcstart = () @trusted {return GC.stats;}();
+
+        CTHashMap!(int, int) c;
+
+        foreach(i;0..iterations) {
+            int k = randw[i];
+            c.put(k, i);
+        }
+
+        foreach(i; 0..iterations) {
+            int k = randr[i];
+            c.remove(k);
+        }
+        foreach(i; 0..iterations) {
+            int k = randw[i];
+            auto v = k in c;
+        }
+        gcstop = () @trusted {return GC.stats;} ();
+    }
+
+    void f_hashmap_remove() {
+        gcstart = () @trusted {return GC.stats;}();
+
+        HashMap!(int, int) c;
+
+        foreach(i;0..iterations) {
+            int k = randw[i];
+            c[k] = i;
+        }
+
+        foreach(i; 0..iterations) {
+            int k = randr[i];
+            c.remove(k);
+        }
+        foreach(i; 0..iterations) {
+            int k = randw[i];
+            auto v = k in c;
+        }
+        gcstop = () @trusted {return GC.stats;} ();
+    }
+
+    void LARGE_AA() @safe {
+        gcstart = () @trusted {return GC.stats;}();
+
+        LARGE[int] c;
+
+        foreach(i;0..iterations) {
+            int k = randw[i];
+            c[k] = LARGE(i);
+        }
+
+        foreach(i; 0..iterations) {
+            int k = randr[i];
+            auto v = k in c;
+            if ( v ) {
+                hits++;
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+    void OALARGE() @safe {
+        gcstart = () @trusted {return GC.stats;}();
+
+        CTHashMap!(int, LARGE) c;
+
+        foreach(i;0..iterations) {
+            int k = randw[i];
+            c.put(k, LARGE(i));
+        }
+
+        foreach(i; 0..iterations) {
+            int k = randr[i];
+            auto v = k in c;
+            if ( v ) {
+                hits++;
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+    void OALARGE_GC() @safe {
+        gcstart = () @trusted {return GC.stats;}();
+
+        CTHashMap!(int, LARGE, GCAllocator) c;
+
+        foreach(i;0..iterations) {
+            int k = randw[i];
+            c.put(k, LARGE(i));
+        }
+
+        foreach(i; 0..iterations) {
+            int k = randr[i];
+            auto v = k in c;
+            if ( v ) {
+                hits++;
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+    void HMLARGE() {
+        gcstart = () @trusted {return GC.stats;}();
+
+        HashMap!(int, LARGE) c;
+
+        foreach(i;0..iterations) {
+            int k = randw[i];
+            c[k] = LARGE(i);
+        }
+
+        foreach(i; 0..iterations) {
+            int k = randr[i];
+            auto v = k in c;
+            if ( v ) {
+                hits++;
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    void structkey_AA() @safe {
+        gcstart = () @trusted {return GC.stats;}();
+
+        int[immutable LARGE] c;
+
+        foreach(i;0..iterations) {
+            int k = randw[i];
+            c[LARGE(k)] = k;
+        }
+
+        foreach(i; 0..iterations) {
+            immutable k = immutable LARGE(randr[i]);
+            auto v = k in c;
+            if ( v ) {
+                hits++;
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+    void structkey_OA() @safe {
+        gcstart = () @trusted {return GC.stats;}();
+
+        CTHashMap!(immutable LARGE, int) c;
+
+        foreach(i;0..iterations) {
+            int k = randw[i];
+            c[LARGE(k)] = k;
+        }
+
+        foreach(i; 0..iterations) {
+            immutable k = immutable LARGE(randr[i]);
+            auto v = k in c;
+            if ( v ) {
+                hits++;
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+    void structkey_OAGC() @safe {
+        gcstart = () @trusted {return GC.stats;}();
+
+        CTHashMap!(immutable LARGE, int, GCAllocator) c;
+
+        foreach(i;0..iterations) {
+            int k = randw[i];
+            c[LARGE(k)] = k;
+        }
+
+        foreach(i; 0..iterations) {
+            immutable k = immutable LARGE(randr[i]);
+            auto v = k in c;
+            if ( v ) {
+                hits++;
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+    void structkey_emsi()
+    {
+        gcstart = () @trusted {return GC.stats;}();
+
+        HashMap!(immutable LARGE, int) c;
+
+        foreach(i;0..iterations) {
+            int k = randw[i];
+            c[LARGE(k)] = k;
+        }
+
+        foreach(i; 0..iterations) {
+            immutable k = immutable LARGE(randr[i]);
+            auto v = k in c;
+            if ( v ) {
+                hits++;
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    void classkey_AA() @safe {
+        gcstart = () @trusted {return GC.stats;}();
+
+        int[immutable CLASS] c;
+
+        foreach(i;0..iterations) {
+            int k = randw[i];
+            immutable key = new immutable CLASS(k);
+            c[key] = i;
+        }
+
+        foreach(i; 0..iterations) {
+            immutable k = new immutable CLASS(randr[i]);
+            auto v = k in c;
+            if ( v ) {
+                hits++;
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+    void classkey_OA() @safe {
+        gcstart = () @trusted {return GC.stats;}();
+
+        CTHashMap!(immutable CLASS, int) c;
+
+        foreach(i;0..iterations) {
+            int k = randw[i];
+            immutable key = new immutable CLASS(k);
+            c[key] = i;
+        }
+
+        foreach(i; 0..iterations) {
+            immutable k = new immutable CLASS(randr[i]);
+            auto v = k in c;
+            if ( v ) {
+                hits++;
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+    void classkey_OAGC() @safe
+    {
+        gcstart = () @trusted {return GC.stats;}();
+
+        CTHashMap!(immutable CLASS, int, GCAllocator) c;
+
+        foreach(i;0..iterations) {
+            int k = randw[i];
+            immutable key = new immutable CLASS(k);
+            c[key] = i;
+        }
+
+        foreach(i; 0..iterations) {
+            immutable k = new immutable CLASS(randr[i]);
+            auto v = k in c;
+            if ( v ) {
+                hits++;
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+    void test_dlist_std()
+    {
+        import std.container.dlist;
+        gcstart = () @trusted {return GC.stats;}();
+        auto intList = new DList!int;
+        foreach(i; randw)
+        {
+            intList.insertBack(i);
+            if (i < iterations/10)
+            {
+                intList.removeFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    void test_slist_std()
+    {
+        import std.container.slist;
+        gcstart = () @trusted {return GC.stats;}();
+        auto intList = new SList!int;
+        foreach(i; randw)
+        {
+            intList.insertFront(i);
+            if (i < iterations/10)
+            {
+                intList.removeFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    void test_dlist_cachetools() @safe
+    {
+        import cachetools.containers.lists;
+        gcstart = () @trusted {return GC.stats;}();
+        DList!int intList;
+        foreach(i; randw)
+        {
+            intList.insert_last(i);
+            if (i < iterations/10)
+            {
+                intList.popFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+    void test_slist_cachetools() @safe
+    {
+        import cachetools.containers.lists;
+        gcstart = () @trusted {return GC.stats;}();
+        SList!int intList;
+        foreach(i; randw)
+        {
+            intList.insertFront(i);
+            if (i < iterations/10)
+            {
+                intList.popFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    void test_dlist_cachetools_GC() @safe
+    {
+        import cachetools.containers.lists;
+        gcstart = () @trusted {return GC.stats;}();
+        DList!(int, GCAllocator) intList;
+        foreach(i; randw)
+        {
+            intList.insert_last(i);
+            if (i < iterations/10)
+            {
+                intList.popFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+    void test_slist_cachetools_GC() @safe
+    {
+        import cachetools.containers.lists;
+        gcstart = () @trusted {return GC.stats;}();
+        SList!(int, GCAllocator) intList;
+        foreach(i; randw)
+        {
+            intList.insertFront(i);
+            if (i < iterations/10)
+            {
+                intList.popFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    void test_clist_cachetools() @safe
+    {
+        import cachetools.containers.lists;
+        gcstart = () @trusted {return GC.stats;}();
+        CompressedList!int intList;
+        foreach(i; randw)
+        {
+            intList.insertFront(i);
+            if (i < iterations/10)
+            {
+                intList.popFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    void test_clist_cachetoolsGC() @safe
+    {
+        import cachetools.containers.lists;
+        gcstart = () @trusted {return GC.stats;}();
+        CompressedList!(int, GCAllocator) intList;
+        foreach(i; randw)
+        {
+            intList.insertFront(i);
+            if (i < iterations/10)
+            {
+                intList.popFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    void test_dlist_emsi()
+    {
+        import containers.unrolledlist;
+        gcstart = () @trusted {return GC.stats;}();
+        UnrolledList!int intList;
+        foreach(i; randw)
+        {
+            intList.insertBack(i);
+            if (i < iterations/10)
+            {
+                intList.popFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+    void test_slist_emsi()
+    {
+        import containers.slist: SList;
+        gcstart = () @trusted {return GC.stats;}();
+        SList!int intList;
+        foreach(i; randw)
+        {
+            intList.insertFront(i);
+            if (i < iterations/10)
+            {
+                intList.popFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    // --
+    void test_dlist_std_LARGE()
+    {
+        import std.container.dlist;
+        gcstart = () @trusted {return GC.stats;}();
+        auto list = new DList!LARGE;
+        foreach(i; randw)
+        {
+            list.insertBack(LARGE(i));
+            if (i < iterations/10)
+            {
+                list.removeFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    void test_dlist_cachetools_LARGE() @safe
+    {
+        import cachetools.containers.lists;
+        gcstart = () @trusted {return GC.stats;}();
+        DList!LARGE list;
+        foreach(i; randw)
+        {
+            list.insert_last(LARGE(i));
+            if (i < iterations/10)
+            {
+                list.popFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    void test_dlist_cachetools_LARGE_GC() @safe
+    {
+        import cachetools.containers.lists;
+        gcstart = () @trusted {return GC.stats;}();
+        DList!(LARGE, GCAllocator) list;
+        foreach(i; randw)
+        {
+            list.insert_last(LARGE(i));
+            if (i < iterations/10)
+            {
+                list.popFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    void test_clist_cachetools_LARGE() @safe
+    {
+        import cachetools.containers.lists;
+        gcstart = () @trusted {return GC.stats;}();
+        CompressedList!(LARGE) list;
+        foreach(i; randw)
+        {
+            list.insertBack(LARGE(i));
+            if (i < iterations/10)
+            {
+                list.popFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    void test_clist_cachetools_LARGE_GC() @safe
+    {
+        import cachetools.containers.lists;
+        gcstart = () @trusted {return GC.stats;}();
+        CompressedList!(LARGE, GCAllocator) list;
+        foreach(i; randw)
+        {
+            list.insertBack(LARGE(i));
+            if (i < iterations/10)
+            {
+                list.popFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    void test_dlist_emsi_LARGE()
+    {
+        import containers.unrolledlist;
+        gcstart = () @trusted {return GC.stats;}();
+        UnrolledList!LARGE list;
+        foreach(i; randw)
+        {
+            list.insertBack(LARGE(i));
+            if (i < iterations/10)
+            {
+                list.popFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+    // - large with ref
+    // --
+    void test_dlist_std_LARGE_REF()
+    {
+        import std.container.dlist;
+        gcstart = () @trusted {return GC.stats;}();
+        auto list = new DList!LARGE_REF;
+        foreach(i; randw)
+        {
+            list.insertBack(LARGE_REF(i));
+            if (i < iterations/10)
+            {
+                list.removeFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    void test_dlist_cachetools_LARGE_REF() @safe
+    {
+        import cachetools.containers.lists;
+        gcstart = () @trusted {return GC.stats;}();
+        DList!(LARGE_REF) list;
+        foreach(i; randw)
+        {
+            list.insertBack(LARGE_REF(i));
+            if (i < iterations/10)
+            {
+                list.popFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    void test_dlist_cachetools_LARGE_REF_GC() @safe
+    {
+        import cachetools.containers.lists;
+        gcstart = () @trusted {return GC.stats;}();
+        DList!(LARGE_REF, GCAllocator) list;
+        foreach(i; randw)
+        {
+            list.insertBack(LARGE_REF(i));
+            if (i < iterations/10)
+            {
+                list.popFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    void test_clist_cachetools_LARGE_REF() @safe
+    {
+        import cachetools.containers.lists;
+        gcstart = () @trusted {return GC.stats;}();
+        CompressedList!(LARGE_REF) list;
+        foreach(i; randw)
+        {
+            list.insertBack(LARGE_REF(i));
+            if (i < iterations/10)
+            {
+                list.popFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    void test_clist_cachetools_LARGE_REF_GC() @safe
+    {
+        import cachetools.containers.lists;
+        gcstart = () @trusted {return GC.stats;}();
+        CompressedList!(LARGE_REF, GCAllocator) list;
+        foreach(i; randw)
+        {
+            list.insertBack(LARGE_REF(i));
+            if (i < iterations/10)
+            {
+                list.popFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    void test_dlist_emsi_LARGE_REF()
+    {
+        import containers.unrolledlist;
+        gcstart = () @trusted {return GC.stats;}();
+        UnrolledList!LARGE_REF list;
+        foreach(i; randw)
+        {
+            list.insertBack(LARGE_REF(i));
+            if (i < iterations/10)
+            {
+                list.popFront();
+            }
+        }
+        gcstop = () @trusted {return GC.stats;}();
+    }
+
+    ///
+    void shakespeare_std()
+    {
+        gcstart = () @trusted {return GC.stats;} ();
+
+        int[string] count;
+        void updateCount(string word) {
+            auto ptr = word in count;
+            if (!ptr)
+                count[word] = 1;
+            else
+                (*ptr)++;
+        }
+        foreach(word; words.range()) {
+            updateCount(word);
+        }
+        gcstop = () @trusted {return GC.stats;} ();
+    }
+    void shakespeare_OAHashMap()
+    {
+        gcstart = () @trusted {return GC.stats;} ();
+
+        CTHashMap!(string, int) count;
+
+        void updateCount(string word) {
+            count.getOrAdd(word, 0)++;
+        }
+
+        foreach(word; words.range()) {
+            updateCount(word);
+        }
+        gcstop = () @trusted {return GC.stats;} ();
+    }
+    void shakespeare_OAHashMapGC()
+    {
+        gcstart = () @trusted {return GC.stats;} ();
+
+        CTHashMap!(string, int, GCAllocator) count;
+
+        void updateCount(string word) {
+            count.getOrAdd(word, 0)++;
+        }
+
+        foreach(word; words.range()) {
+            updateCount(word);
+        }
+        gcstop = () @trusted {return GC.stats;} ();
+    }
+
+    void shakespeare_HashMap()
+    {
+        gcstart = () @trusted {return GC.stats;} ();
+
+        HashMap!(string, int) count;
+
+        void updateCount(string word) {
+            auto ptr = word in count;
+            if (!ptr)
+                count[word] = 1;
+            else
+                (*ptr)++;
+        }
+
+        foreach(word; words.range()) {
+            updateCount(word);
+        }
+        gcstop = () @trusted {return GC.stats;} ();
+    }
+
+    void test_integrity()
+    {
+        int[string] stdcount;
+        void updateStdCount(string word) {
+            auto ptr = word in stdcount;
+            if (!ptr)
+                stdcount[word] = 1;
+            else
+                (*ptr)++;
+        }
+        foreach(word; words.range()) {
+            updateStdCount(word);
+        }
+
+        CTHashMap!(string, int) mycount;
+
+        void updateMyCount(string word) {
+            mycount.getOrAdd(word, 0)++;
+        }
+
+        foreach(word; words.range()) {
+            updateMyCount(word);
+        }
+        assert(stdcount.length == mycount.length);
+        foreach(pair; mycount.byPair)
+        {
+            assert(pair.value == stdcount[pair.key]);
+        }
+    }
+    void test_ct_cache()
+    {
+        gcstart = () @trusted {return GC.stats;}();
+
+        auto c = new CacheLRUCT!(string, int);
+        c.size = 1024;
+        hits = 0;
+        foreach(_;0..2)
+            foreach(w;words.range()) {
+                Nullable!int v;
+                v = c.get(w);
+                if ( !v.isNull  )
+                {
+                    hits++;
+                    continue;
+                }
+                c.put(w, 1);
+            }
+
+        gcstop = () @trusted {return GC.stats;} ();
+    }
+
+    void test_ct_cache_gc() @safe
+    {
+        gcstart = () @trusted {return GC.stats;}();
+
+        auto c = new CacheLRUCT!(string, int, GCAllocator);
+        c.size = 1024;
+        hits = 0;
+        foreach(_;0..2)
+            foreach(w;words.range()) {
+                Nullable!int v;
+                v = c.get(w);
+                if ( !v.isNull  )
+                {
+                    hits++;
+                    continue;
+                }
+                c.put(w, 1);
+            }
+        gcstop = () @trusted {return GC.stats;} ();
+    }
+
+    void test_2q_cache()
+    {
+        gcstart = () @trusted {return GC.stats;}();
+
+        auto c = new Cache2Q!(string, int);
+        c.size = 1024;
+        hits = 0;
+        foreach(_;0..2)
+            foreach(w; words.range()) {
+                Nullable!int v;
+                v = c.get(w);
+                if ( !v.isNull  )
+                {
+                    hits++;
+                    continue;
+                }
+                c.put(w, 1);
+            }
+
+        gcstop = () @trusted {return GC.stats;} ();
+    }
+
+    void test_2q_gc_cache() @safe
+    {
+        gcstart = () @trusted {return GC.stats;}();
+
+        auto c = new Cache2Q!(string, int, GCAllocator);
+        c.size = 1024;
+        hits = 0;
+        foreach(_;0..2)
+            foreach(w; words.range()) {
+                Nullable!int v;
+                v = c.get(w);
+                if ( !v.isNull  )
+                {
+                    hits++;
+                    continue;
+                }
+                c.put(w, 1);
+            }
+
+        gcstop = () @trusted {return GC.stats;} ();
+    }
+
+
     string fmt  = "|%-11.11s | %-31.31s | GC memory Δ %6.2f MB|";
     string fmth = "|%-11.11s | %-31.31s | GC memory Δ %6.2f MB| hits %.2f|";
 
@@ -1217,11 +1220,11 @@ void main()
 
     version(Posix)
     {
-        // this test lead to crash under win and linux
-        // GC.collect();GC.minimize();
-        // test = "emsi";
-        // r = benchmark!(structkey_emsi)(trials);
-        // writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
+         //this test lead to crash under win and linux
+         GC.collect();GC.minimize();
+         test = "emsi";
+         r = benchmark!(structkey_emsi)(trials);
+         writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
     }
 
     writeln("\n", center(" Test inserts and lookups for int[class] ", 50, ' '));
@@ -1273,10 +1276,10 @@ void main()
     version(Posix)
     {
         // emsi-containers do not work for me under windows
-        GC.collect();GC.minimize();
-        test = "emsi  ";
-        r = benchmark!shakespeare_HashMap(1);
-        writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
+        //GC.collect();GC.minimize();
+        //test = "emsi  ";
+        //r = benchmark!shakespeare_HashMap(1);
+        //writefln(fmt, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024);
     }
 
     GC.collect();GC.minimize();
@@ -1422,7 +1425,6 @@ void main()
     r = benchmark!(test_ct_cache_gc)(trials);
     writefln(fmth, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024, (1e0*hits)/words.length/2);
 
-    globalLogLevel = LogLevel.trace;
     test = "2Q";
     GC.collect();GC.minimize();
     r = benchmark!(test_2q_cache)(trials);
