@@ -111,7 +111,7 @@ private bool keyEquals(K)(const K a, const K b)
     assert(keyEquals(a,d));
     assert(keyEquals(1,1));
 }
-
+/*
 package struct ChainedHashMap(K, V, Allocator = Mallocator)
 {
     enum initial_buckets_num = 32;
@@ -551,14 +551,14 @@ package struct ChainedHashMap(K, V, Allocator = Mallocator)
     }
 
 }
-
+*/
 @safe unittest
 {
     // test of nogc getOrAdd
     import std.experimental.logger;
     globalLogLevel = LogLevel.info;
     import std.meta;
-    static foreach(T; AliasSeq!(ChainedHashMap!(int, int), HashMap!(int, int))) {
+    static foreach(T; AliasSeq!(HashMap!(int, int))) {
         () @nogc nothrow
         {
             T hashMap;
@@ -614,7 +614,7 @@ package struct ChainedHashMap(K, V, Allocator = Mallocator)
 @safe @nogc nothrow unittest
 {
     import std.meta;
-    static foreach(T; AliasSeq!(ChainedHashMap!(int, int), HashMap!(int, int))) {
+    static foreach(T; AliasSeq!(HashMap!(int, int))) {
         {
             T hashMap;
             int i = hashMap.get(1, 55);
@@ -1288,7 +1288,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
     {
         int s;
     }
-    static foreach(T; AliasSeq!(ChainedHashMap!(immutable S, int), HashMap!(immutable S, int))) {
+    static foreach(T; AliasSeq!(HashMap!(immutable S, int))) {
         () @nogc nothrow
         {
             T hs1;
@@ -1297,7 +1297,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
             assert(ss in hs1 && *(ss in hs1) == 1);
         }();
     }
-    static foreach(T; AliasSeq!(ChainedHashMap!(int, immutable S), HashMap!(int, immutable S))) {
+    static foreach(T; AliasSeq!(HashMap!(int, immutable S))) {
         () @nogc nothrow
         {
             T hs2;
@@ -1322,7 +1322,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
             return hash_function(v);
         }
     }
-    static foreach(T; AliasSeq!(ChainedHashMap!(immutable C, int), HashMap!(immutable C, int)))
+    static foreach(T; AliasSeq!(HashMap!(immutable C, int)))
     {
         {
             T hc1;
@@ -1331,7 +1331,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
             assert(hc1[cc] == 1);
         }
     }
-    static foreach(T; AliasSeq!(ChainedHashMap!(int, immutable C), HashMap!(int, immutable C)))
+    static foreach(T; AliasSeq!(HashMap!(int, immutable C)))
     {
         {
             immutable cc = new immutable C(1);
@@ -1703,7 +1703,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
 @safe unittest
 {
     import std.socket, std.meta;
-    static foreach(T; AliasSeq!(ChainedHashMap!(string, Socket), HashMap!(string, Socket)))
+    static foreach(T; AliasSeq!(HashMap!(string, Socket)))
     {
         {
             T socketPool;
@@ -1752,7 +1752,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
             v = to!string(_v);
         }
     }
-    static foreach(T; AliasSeq!(ChainedHashMap!(int, C),HashMap!(int, C)))
+    static foreach(T; AliasSeq!(HashMap!(int, C)))
     {
         {
             T hashMap;
