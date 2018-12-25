@@ -445,9 +445,6 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
         n.next.prev = n.prev;
         // insert back
-        if ( _head is null ) {
-            _head = n;
-        }
         n.prev = _tail;
         if ( _tail !is null )
         {
@@ -482,9 +479,6 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
 
         // insert front
-        if ( _tail is null ) {
-            _tail = n;
-        }
         n.next = _head;
         if ( _head !is null )
         {
@@ -1469,20 +1463,21 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
     assert(list.front == 99);
     assert(list.back == 100);
     auto p98 = list.insertFront(98);
-
+    auto p101 = list.insertBack(101);
     () @trusted // * and remove for poiners is unsafe
     {
         assert(*p98 == 98);
-        assert(list.length == 3);
+        assert(list.length == 4);
         list.remove(p98);
-        assert(list.length == 2);
+        assert(list.length == 3);
         assert(list.front == 99);
         list.remove(p100);
-        assert(list.length == 1);
+        assert(list.length == 2);
         assert(list.front == 99);
-        assert(list.back == 99);
+        assert(list.back == 101);
         list.remove(p99);
-        assert(list.length == 0);
+        assert(list.length == 1);
+        list.clear();
 
         foreach(i;0..1000)
         {
@@ -1493,6 +1488,7 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
 
         iota(0, 1000).
             map!(i => list.insertBack(i)).
+            array.
             each!(p => list.remove(p));
         assert(list.empty);
     }();
@@ -1507,21 +1503,19 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
     class C
     {
         int c;
-        this(int v)
-        {
+        this(int v) {
             c = v;
         }
     }
     CompressedList!C clist;
-    foreach(i;0..1000)
+    foreach(i;0..2000)
     {
         clist.insertBack(new C(i));
     }
-    foreach(i;0..500)
+    foreach(i;0..1500)
     {
         clist.popBack();
     }
     assert(clist.length == 500);
     clist.clear();
-    
 }
