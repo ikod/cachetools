@@ -79,6 +79,7 @@ class CacheLRU(K, V, Allocator = Mallocator)
         }
         void opAssign(CacheEventRange!(K, V) other) @safe
         {
+            __events.clear();
             __events = other.__events;
         }
         this(ref SList!(CacheEvent!(K,V), Allocator) events) @safe
