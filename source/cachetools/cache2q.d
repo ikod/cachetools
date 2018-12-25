@@ -88,10 +88,6 @@ class Cache2Q(K, V, Allocator=Mallocator)
 
     }
 
-    final ~this() @safe
-    {
-        //clear();
-    }
     final auto size(uint s)
     {
         _kin =  1*s/6;

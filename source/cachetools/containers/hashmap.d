@@ -676,33 +676,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
     }
 
     ~this() @safe {
-        if ( _buckets_num > 0 )
-        {
-            static if ( !inlineValues )
-            {
-                for(int i=0;i<_buckets_num;i++)
-                {
-                    auto t = _buckets[i].hash;
-                    if ( t <= DELETED_HASH )
-                    {
-                        continue;
-                    }
-                    () @trusted
-                    {
-                        static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
-                            GC.removeRange(_buckets[i].value_ptr);
-                        }
-                        dispose(allocator, _buckets[i].value_ptr);
-                    }();
-                }
-            }
-            (() @trusted {
-                static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
-                    GC.removeRange(_buckets.ptr);
-                }
-                dispose(allocator, _buckets.ptr);
-            })();
-        }
+        clear();
     }
     invariant {
         assert(_allocated>=0 && _deleted>=0 && _empty >= 0);
@@ -1135,28 +1109,36 @@ struct HashMap(K, V, Allocator = Mallocator) {
     }
     void clear() @safe 
     {
-        static if ( !inlineValues )
+        if ( _buckets_num > 0 )
         {
-           // dispose every element
-           foreach(k; byKey)
-           {
-               remove(k);
-           }
-        }
-        () @trusted {
-            static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
-                GC.removeRange(_buckets.ptr);
+            static if ( !inlineValues )
+            {
+                for(int i=0;i<_buckets_num;i++)
+                {
+                    auto t = _buckets[i].hash;
+                    if ( t <= DELETED_HASH )
+                    {
+                        continue;
+                    }
+                    () @trusted
+                    {
+                        static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+                            GC.removeRange(_buckets[i].value_ptr);
+                        }
+                        dispose(allocator, _buckets[i].value_ptr);
+                    }();
+                }
             }
-            dispose(allocator, _buckets.ptr);
-        }();
-        _buckets = makeArray!(_Bucket)(allocator, _buckets_num);
-        static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
-            () @trusted {
-                GC.addRange(&_buckets[0], _buckets_num * _Bucket.sizeof);
-            }();
+            (() @trusted {
+                static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+                    GC.removeRange(_buckets.ptr);
+                }
+                dispose(allocator, _buckets.ptr);
+            })();
         }
-        _allocated = _deleted = 0;
-        _empty = _buckets_num;
+
+        _buckets = null;
+        _allocated = _deleted = _empty = _buckets_num = 0;
     }
     auto length() const pure nothrow @nogc @safe
     {

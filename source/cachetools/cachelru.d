@@ -70,7 +70,13 @@ class CacheLRU(K, V, Allocator = Mallocator)
     }
     struct CacheEventRange(K,V)
     {
-        SList!(CacheEvent!(K,V), Allocator) __events;
+
+        private SList!(CacheEvent!(K,V), Allocator) __events;
+
+        ~this() @safe
+        {
+            __events.clear();
+        }
         void opAssign(CacheEventRange!(K, V) other) @safe
         {
             __events = other.__events;
@@ -97,7 +103,6 @@ class CacheLRU(K, V, Allocator = Mallocator)
             return __events.length;
         } 
     }
-
     ///
     final Nullable!V get(K k) @safe
     {
@@ -419,7 +424,7 @@ unittest
     assert(s11v is s1v);
 }
 
-@nogc nothrow unittest
+unittest
 {
     import std.experimental.allocator.mallocator;
 
@@ -437,6 +442,7 @@ unittest
     v = lru.get(1);
     assert(v == "one"); // 1 is in cache
     lru.remove(1);
+    dispose(allocator, lru);
 }
 
 ///

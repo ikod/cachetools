@@ -13,8 +13,9 @@ private import cachetools.internal;
 
 ///
 /// N-way multilist
-struct MultiDList(T, int N, Allocator = Mallocator)
+struct MultiDList(T, int N, Allocator = Mallocator, bool GCRangesAllowed = true)
 {
+    static assert(N>0);
     alias allocator = Allocator.instance;
     struct Node {
         T payload;
@@ -42,6 +43,10 @@ struct MultiDList(T, int N, Allocator = Mallocator)
         size_t      _length;
         
     }
+    ~this() @safe
+    {
+        clear();
+    }
     size_t length() const pure nothrow @safe @nogc {
         return _length;
     }
@@ -54,7 +59,7 @@ struct MultiDList(T, int N, Allocator = Mallocator)
     do
     {
         auto n = make!(Node)(allocator, v);
-        static if ( !is(Allocator == GCAllocator) )
+        static if ( UseGCRanges!(Allocator, T, GCRangesAllowed) )
         {
             () @trusted
             {
@@ -142,7 +147,7 @@ struct MultiDList(T, int N, Allocator = Mallocator)
             }
         }
         () @trusted {
-            static if ( !is(Allocator == GCAllocator) )
+            static if ( UseGCRanges!(Allocator, T, GCRangesAllowed) )
             {
                 GC.removeRange(n);
             }
@@ -368,6 +373,7 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
                 }
                 dispose(allocator, n);
             }();
+            n = next;
         }
         n = _freelist;
         while(n)
@@ -705,9 +711,8 @@ struct SList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
             })();
             n = next;
         }
-        _length = 0;
-        _freelist_len = 0;
-        _first = _last = null;
+        _length = _freelist_len = 0;
+        _first = _last = _freelist = null;
     }
     private struct Range(T) {
         private {
@@ -889,6 +894,8 @@ struct SList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         dlist.insertBack(3);
         dlist.insertFront(0);
         dlist.move_to_tail(p);
+        dlist.move_to_tail(p);
+        dlist.move_to_head(p);
         dlist.move_to_head(p);
         dlist.remove(p);
     }();
@@ -908,11 +915,12 @@ struct SList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
     {
         dlist_c.insertBack(new C(i));
     }
-    foreach(i;0..1000)
+    foreach(i;0..500)
     {
         dlist_c.popFront();
     }
-    assert(dlist_c.length() == 0);
+    assert(dlist_c.length() == 500);
+    dlist_c.clear();
     dlist_c.popFront();
     dlist_c.popBack();
     assert(dlist_c.length() == 0);
@@ -1173,7 +1181,7 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
             }();
             page = next;
         }
-        _length = 0;
+        _length = _freelist_len = 0;
         _pages_first = _pages_last = _freelist = null;
     }
 
@@ -1296,6 +1304,10 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
             {
                 _pages_last = null;
             }
+            else
+            {
+                _pages_first._prevPage = null;
+            }
         }
         debug(cachetools) safe_tracef("popfront: page after: %s", *page);
     }
@@ -1385,6 +1397,10 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
             if ( _pages_last is null )
             {
                 _pages_first = null;
+            }
+            else
+            {
+                _pages_last._nextPage = null;
             }
         }
     }
@@ -1493,4 +1509,23 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
         immutable S s = S();
         islist.insertFront(s);
     }();
+    class C
+    {
+        int c;
+        this(int v)
+        {
+            c = v;
+        }
+    }
+    CompressedList!C clist;
+    foreach(i;0..1000)
+    {
+        clist.insertBack(new C(i));
+    }
+    foreach(i;0..500)
+    {
+        clist.popBack();
+    }
+    assert(clist.length == 500);
+    clist.clear();
 }
