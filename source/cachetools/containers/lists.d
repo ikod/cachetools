@@ -820,17 +820,34 @@ struct SList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
     assert(!removed);
     assert(l.length()==0);
     auto l1 = SList!int();
-    foreach(i;0..100) {
+    foreach(i;0..10000) {
         l1.insertBack(i);
     }
     while(l1.length) {
         l1.popFront();
     }
-    foreach(i;0..100) {
+    foreach(i;0..10000) {
         l1.insertFront(i);
     }
     while(l1.length) {
         l1.popFront();
+    }
+}
+@safe unittest
+{
+    class C
+    {
+        int c;
+        this(int v) {
+            c = v;
+        }
+    }
+    SList!C l2;
+    foreach(i;0..10000) {
+        l2.insertBack(new C(i));
+    }
+    while(l2.length) {
+        l2.popFront();
     }
 }
 
@@ -1491,6 +1508,14 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
             array.
             each!(p => list.remove(p));
         assert(list.empty);
+        iota(0, 1000).map!(i => list.insertBack(i));
+        auto r = list.range();
+        while(!r.empty)
+        {
+            int v = r.front;
+            r.popFront();
+        }
+        assert(list.empty);
     }();
 
     () @nogc
@@ -1508,11 +1533,11 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
         }
     }
     CompressedList!C clist;
-    foreach(i;0..2000)
+    foreach(i;0..5000)
     {
         clist.insertBack(new C(i));
     }
-    foreach(i;0..1500)
+    foreach(i;0..4500)
     {
         clist.popBack();
     }
