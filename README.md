@@ -13,7 +13,12 @@ This is because inheritance and attribute inference don't work together.
 
 ### 2Q cache ###
 
-2Q cache is 
+2Q cache is variant of multi-level LRU cache. Original paper http://www.vldb.org/conf/1994/P439.PDF
+It is adaptive, scan-resistant and can give more hits than plain LRU.
+
+This cache consists from three parts (In, Out and Main) where 'In' receive all new elements, 'Out' receives all
+overflows from 'In', and 'Main' is LRU cache which hold all long-lived data.)
+
 
 ### LRU cache ###
 
