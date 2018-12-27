@@ -68,6 +68,9 @@ class CacheLRU(K, V, Allocator = Mallocator)
         uint    __ttl;                  // use TTL if __ttl > 0
         bool    __reportCacheEvents;    // will user read cache events?
     }
+    final this() @safe {
+        __map.grow_factor(4);
+    }
     struct CacheEventRange(K,V)
     {
 

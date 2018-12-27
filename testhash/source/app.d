@@ -1415,12 +1415,12 @@ void main()
     writeln("\n", center(" Test cache ", 50, ' '));
     writeln(      center(" ========== ", 50, ' '));
 
-    test = "c.t";
+    test = "lru";
     GC.collect();GC.minimize();
     r = benchmark!(test_ct_cache)(trials);
     writefln(fmth, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024, (1e0*hits)/words.length/2);
 
-    test = "c.t+GC";
+    test = "lru+GC";
     GC.collect();GC.minimize();
     r = benchmark!(test_ct_cache_gc)(trials);
     writefln(fmth, test, to!string(r[0]), 1e0*(gcstop.usedSize - gcstart.usedSize)/1024/1024, (1e0*hits)/words.length/2);

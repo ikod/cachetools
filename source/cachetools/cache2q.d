@@ -87,7 +87,11 @@ class Cache2Q(K, V, Allocator=Mallocator)
         HashMap!(K, MainMapElement, Allocator)      _MainMap;
 
     }
-
+    final this() @safe {
+        _InMap.grow_factor(4);
+        _OutMap.grow_factor(4);
+        _MainMap.grow_factor(4);
+    }
     final auto size(uint s)
     {
         _kin =  1*s/6;

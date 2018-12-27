@@ -552,88 +552,10 @@ package struct ChainedHashMap(K, V, Allocator = Mallocator)
 
 }
 */
-@safe unittest
-{
-    // test of nogc getOrAdd
-    import std.experimental.logger;
-    globalLogLevel = LogLevel.info;
-    import std.meta;
-    static foreach(T; AliasSeq!(HashMap!(int, int))) {
-        () @nogc nothrow
-        {
-            T hashMap;
-            debug(cachetools) safe_tracef("Testing %s", typeid(T));
-            foreach (i;0..10) {
-                hashMap.put(i, i);
-            }
-            foreach (i;0..10) {
-                hashMap.put(i, i);
-            }
-            foreach (i;0..10) {
-                assert(i==*(i in hashMap));
-            }
-            assert(hashMap.length == 10);
-            hashMap.remove(0);
-            assert(hashMap.length == 9);
-            assert((0 in hashMap) is null);
-            hashMap.remove(1);
-            assert(hashMap.length == 8);
-            assert((1 in hashMap) is null);
-            assert(8 in hashMap);
-            hashMap.remove(8);
-            assert(hashMap.length == 7);
-            assert((8 in hashMap) is null);
-            foreach (i;0..10) {
-                hashMap.put(i, i);
-            }
-            assert(hashMap.length == 10);
-            hashMap.remove(8);
-            hashMap.remove(1);
-            assert(hashMap.length == 8);
-            assert((1 in hashMap) is null);
-            assert((8 in hashMap) is null);
-            assert(hashMap.remove(1) == false);
-            foreach (i;0..10) {
-                hashMap.remove(i);
-            }
-            assert(hashMap.length == 0);
-            //foreach (b; hashMap._buckets)
-            //{
-            //    assert(b.length == 0);
-            //    assert(b.node.hash == 0);
-            //    assert(b.node.next_node is null);
-            //}
-        }();
-    }
-    //auto v = hashMap.getOrAdd(-1, -1);
-    //assert(-1 in hashMap && v == -1);
-    globalLogLevel = LogLevel.info;
-}
-
-// test get()
-@safe @nogc nothrow unittest
-{
-    import std.meta;
-    static foreach(T; AliasSeq!(HashMap!(int, int))) {
-        {
-            T hashMap;
-            int i = hashMap.get(1, 55);
-            assert(i == 55);
-            i = hashMap.get(1, () => 66);
-            assert(i == 66);
-            hashMap[1] = 1;
-            i = hashMap.get(1, () => 66);
-            assert(i == 1);
-        }
-    }
-}
-
-
 struct HashMap(K, V, Allocator = Mallocator) {
 
     enum initial_buckets_num = 32;
-    enum grow_factor = 2;
-    enum inlineValues = true;//SmallValueFootprint!V()|| is(V==class);
+    enum inlineValues = true;//SmallValueFootprint!V() || is(V==class);
 
     alias StoredKeyType   = StoredType!K;
     alias StoredValueType = StoredType!V;
@@ -673,6 +595,9 @@ struct HashMap(K, V, Allocator = Mallocator) {
         int         _allocated;
         int         _deleted;
         int         _empty;
+
+        int         _grow_factor = 2;
+
     }
 
     ~this() @safe {
@@ -682,29 +607,106 @@ struct HashMap(K, V, Allocator = Mallocator) {
         assert(_allocated>=0 && _deleted>=0 && _empty >= 0);
         assert(_allocated + _deleted + _empty == _buckets_num);
     }
+
     ///
-    /// Find any unallocated bucket starting from start_index (inclusive)
-    /// Returns index on success or hash_t.max on fail
-    ///
-    //private hash_t findEmptyIndex(const hash_t start_index) pure const @safe @nogc
-    //in
-    //{
-    //    assert(start_index < _buckets_num);
-    //}
-    //do {
-    //    hash_t index = start_index;
-    //
-    //    do {
-    //        () @nogc {debug(cachetools) tracef("test index %d for non-ALLOCATED", index);}();
-    //        if ( _buckets[index].hash < ALLOCATED_HASH )
-    //        {
-    //            return index;
-    //        }
-    //        index = (index + 1) & _mask;
-    //    } while(index != start_index);
-    //    return hash_t.max;
-    //}
-    ///
+    struct KeyPointer {
+
+        private _Bucket*                    _bucket;
+        private hash_t                      _hash;
+        private HashMap!(K,V,Allocator)*    _map;
+
+        bool allocated() pure const nothrow @nogc {
+            return _hash >= ALLOCATED_HASH;
+        }
+
+        V get() {
+            static if ( inlineValues )
+            {
+                static if ( is(V==StoredValueType) )
+                {
+                    return _bucket.value;
+                }
+                else
+                {
+                    return cast(V)_bucket.value;
+                }
+            }
+            else
+            {
+                return *_bucket.value_ptr;
+            }
+        }
+
+        void set(V)(auto ref V v)
+        {
+            bool check_overload = false;
+            if ( !allocated() )
+            {
+                _map._allocated++;
+                if ( _bucket.hash == DELETED_HASH )
+                {
+                    _map._deleted--;
+                }
+                else
+                {
+                    _map._empty--;
+                }
+                _hash += ALLOCATED_HASH;
+                _bucket.hash = _hash;
+                check_overload = true;
+            }
+            static if ( inlineValues )
+            {
+                static if ( is(V==StoredValueType) )
+                {
+                    _bucket.value = v;
+                }
+                else
+                {
+                    _bucket.value = cast(StoredValueType)v;
+                }
+            }
+            else
+            {
+                return _bucket.value_ptr = v;
+            }
+            if ( check_overload && _map.tooHighLoad ) {
+                _map.doResize(_map._grow_factor * _map._buckets_num);
+            }
+        }
+    }
+
+    public KeyPointer keyPointer(K key) @safe {
+
+        if ( !_buckets_num ) {
+            _buckets_num = _empty = initial_buckets_num;
+            assert(popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
+            _mask = _buckets_num - 1;
+            _buckets = makeArray!(_Bucket)(allocator, _buckets_num);
+            () @trusted {
+                static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+                    GC.addRange(_buckets.ptr, _buckets_num * _Bucket.sizeof);
+                }
+            }();
+        }
+
+        hash_t computed_hash = hash_function(key) & HASH_MASK;
+        immutable start_index = computed_hash & _mask;
+        immutable placement_index = findUpdateIndex(start_index, computed_hash, key);
+        assert(placement_index >= 0);
+
+        immutable allocated = _buckets[placement_index].hash >= ALLOCATED_HASH;
+        if ( !allocated )
+        {
+            // store key inline
+            _buckets[placement_index].key = key;
+        }
+        else
+        {
+            computed_hash += ALLOCATED_HASH;
+        }
+        return KeyPointer(&_buckets[placement_index], computed_hash, &this);
+    }
     /// Find allocated bucket for given key and computed hash starting from start_index
     /// Returns: index if bucket found or hash_t.max otherwise
     ///
@@ -919,6 +921,28 @@ struct HashMap(K, V, Allocator = Mallocator) {
 
     alias require = getOrAdd;
 
+    auto grow_factor() const @safe {
+        return _grow_factor;
+    }
+    void grow_factor(int gf) @safe {
+        if ( gf < 2 )
+        {
+            _grow_factor = 2;
+            return;
+        }
+        if ( gf > 8 )
+        {
+            _grow_factor = 8;
+            return;
+        }
+        // enforce new grow_factor is power of 2
+        if ( popcnt(gf) > 1 )
+        {
+            auto p = bsr(gf);
+            gf = 1 << (p+1);
+        }
+        _grow_factor = gf;
+    }
     /// Attention: this can't return ref as default value can be rvalue
     V get(T)(K k, T defaultValue) @safe
     {
@@ -989,7 +1013,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         debug(cachetools) safe_tracef("put k: %s, v: %s", k,v);
 
         if ( tooHighLoad ) {
-            doResize(grow_factor * _buckets_num);
+            doResize(_grow_factor * _buckets_num);
         }
 
         V* r; //result
@@ -1166,16 +1190,15 @@ struct HashMap(K, V, Allocator = Mallocator) {
                     _pos++;
                 }
             }
-            bool empty() const pure nothrow @safe @nogc
-            {
+            bool empty() const pure nothrow @safe @nogc {
                 return _pos == _buckets_num;
             }
-            K front()
-            {
+
+            K front() {
                 return _buckets[_pos].key;
             }
-            void popFront() pure nothrow @safe @nogc
-            {
+
+            void popFront() pure nothrow @safe @nogc {
                 _pos++;
                 while( _pos < _buckets_num && _buckets[_pos].hash <  ALLOCATED_HASH )
                 {
@@ -1186,8 +1209,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         return _kvRange(_buckets);
     }
 
-    auto byValue() pure @safe
-    {
+    auto byValue() pure @safe {
         struct _kvRange {
             int         _pos;
             ulong       _buckets_num;
@@ -1202,12 +1224,11 @@ struct HashMap(K, V, Allocator = Mallocator) {
                     _pos++;
                 }
             }
-            bool empty() const pure nothrow @safe @nogc
-            {
+            bool empty() const pure nothrow @safe @nogc {
                 return _pos == _buckets_num;
             }
-            V front()
-            {
+
+            V front() {
                 static if (inlineValues)
                 {
                     return _buckets[_pos].value;
@@ -1217,8 +1238,8 @@ struct HashMap(K, V, Allocator = Mallocator) {
                     return *(_buckets[_pos].value_ptr);
                 }
             }
-            void popFront() pure nothrow @safe @nogc
-            {
+
+            void popFront() pure nothrow @safe @nogc {
                 _pos++;
                 while( _pos < _buckets_num && _buckets[_pos].hash < ALLOCATED_HASH )
                 {
@@ -1276,6 +1297,122 @@ struct HashMap(K, V, Allocator = Mallocator) {
 }
 
 /// Tests
+@safe unittest
+{
+    // test of nogc getOrAdd
+    import std.experimental.logger;
+    globalLogLevel = LogLevel.info;
+    import std.meta;
+    static foreach(T; AliasSeq!(HashMap!(int, int))) {
+        () @nogc nothrow
+        {
+            T hashMap;
+            debug(cachetools) safe_tracef("Testing %s", typeid(T));
+            foreach (i;0..10) {
+                hashMap.put(i, i);
+            }
+            foreach (i;0..10) {
+                hashMap.put(i, i);
+            }
+            foreach (i;0..10) {
+                assert(i==*(i in hashMap));
+            }
+            assert(hashMap.length == 10);
+            hashMap.remove(0);
+            assert(hashMap.length == 9);
+            assert((0 in hashMap) is null);
+            hashMap.remove(1);
+            assert(hashMap.length == 8);
+            assert((1 in hashMap) is null);
+            assert(8 in hashMap);
+            hashMap.remove(8);
+            assert(hashMap.length == 7);
+            assert((8 in hashMap) is null);
+            foreach (i;0..10) {
+                hashMap.put(i, i);
+            }
+            assert(hashMap.length == 10);
+            hashMap.remove(8);
+            hashMap.remove(1);
+            assert(hashMap.length == 8);
+            assert((1 in hashMap) is null);
+            assert((8 in hashMap) is null);
+            assert(hashMap.remove(1) == false);
+            foreach (i;0..10) {
+                hashMap.remove(i);
+            }
+            assert(hashMap.length == 0);
+            //foreach (b; hashMap._buckets)
+            //{
+            //    assert(b.length == 0);
+            //    assert(b.node.hash == 0);
+            //    assert(b.node.next_node is null);
+            //}
+        }();
+    }
+    //auto v = hashMap.getOrAdd(-1, -1);
+    //assert(-1 in hashMap && v == -1);
+    globalLogLevel = LogLevel.info;
+}
+
+// test get()
+@safe @nogc nothrow unittest
+{
+    import std.meta;
+    static foreach(T; AliasSeq!(HashMap!(int, int))) {
+        {
+            T hashMap;
+            int i = hashMap.get(1, 55);
+            assert(i == 55);
+            i = hashMap.get(1, () => 66);
+            assert(i == 66);
+            hashMap[1] = 1;
+            i = hashMap.get(1, () => 66);
+            assert(i == 1);
+        }
+    }
+}
+@safe unittest
+{
+    import std.meta;
+    import std.stdio;
+    static foreach(T; AliasSeq!(HashMap!(int, int))) {
+        {
+            T hashMap;
+            hashMap[1]=1;
+            assert( 1 in hashMap);
+            assert( 2 !in hashMap);
+
+            auto kp1 = hashMap.keyPointer(1);
+            assert(kp1.allocated);
+            kp1.set(11);
+            assert(kp1.get() == 11);
+            assert(hashMap[1] == 11);
+
+            auto kp2 = hashMap.keyPointer(2);
+            assert(!kp2.allocated);
+            kp2.set(2);
+            assert(kp2.allocated);
+            assert(kp2.get() == 2);
+            assert(hashMap[2] == 2);
+            assert(hashMap.length == 2);
+        }
+    }
+    struct S
+    {
+        int s;
+    }
+    HashMap!(immutable S, int) isHashMap;
+    immutable ss = S(1);
+    isHashMap[ss] = 1;
+    assert(ss in isHashMap && *(ss in isHashMap) == 1);
+    auto kp1 = isHashMap.keyPointer(ss);
+    assert( kp1.allocated );
+    assert( kp1.get() == 1);
+    kp1.set(2);
+    assert( isHashMap[ss] == 2);
+}
+
 
 /// test immutable struct and class as Key type
 @safe unittest
@@ -1827,4 +1964,15 @@ struct HashMap(K, V, Allocator = Mallocator) {
     hashMap[1] = 1;
     i = hashMap.get(1, () => 66);
     assert(i == 1);
+}
+// test grow_factor()
+@safe @nogc nothrow unittest
+{
+    HashMap!(int, int) hashMap;
+    hashMap.grow_factor(3);
+    assert(hashMap.grow_factor() == 4);
+    hashMap.grow_factor(0);
+    assert(hashMap.grow_factor() == 2);
+    hashMap.grow_factor(16);
+    assert(hashMap.grow_factor() == 8);
 }
