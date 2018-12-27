@@ -109,6 +109,7 @@ private bool keyEquals(K)(const K a, const K b)
     assert(!keyEquals(a,b));
     assert(keyEquals(a,c));
     assert(keyEquals(a,d));
+    assert(!keyEquals(null, a));
     assert(keyEquals(1,1));
 }
 /*
@@ -640,6 +641,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         void set(V)(auto ref V v)
         {
             bool check_overload = false;
+            debug(cachetools) safe_tracef("bucket: %s", *_bucket);
             if ( !allocated() )
             {
                 _map._allocated++;
@@ -1692,7 +1694,10 @@ struct HashMap(K, V, Allocator = Mallocator) {
     int *v = k0 in h;
     assert(v);
     assert(*v == 1);
-
+    K k1 = new c(1);
+    V v1 = 1;
+    h.put(k0, v0);
+    assert(!keyEquals(k0, k1));
 }
 ///
 /// test byKey, byValue, byPair
@@ -1966,8 +1971,10 @@ struct HashMap(K, V, Allocator = Mallocator) {
     assert(i == 1);
 }
 // test grow_factor()
-@safe @nogc nothrow unittest
+unittest
 {
+    import std.experimental.logger;
+    globalLogLevel = LogLevel.info;
     HashMap!(int, int) hashMap;
     hashMap.grow_factor(3);
     assert(hashMap.grow_factor() == 4);
@@ -1975,4 +1982,15 @@ struct HashMap(K, V, Allocator = Mallocator) {
     assert(hashMap.grow_factor() == 2);
     hashMap.grow_factor(16);
     assert(hashMap.grow_factor() == 8);
+    assert(hashMap.size == 0);
+    assert(hashMap.length == 0);
+    auto kp = hashMap.keyPointer(1);
+    assert(hashMap.size > 0);
+    assert(hashMap.length == 0);
+    kp.set(1);
+    assert(hashMap.length == 1);
+    foreach(i;1..16) hashMap[i]=i;
+    hashMap.remove(1);
+    kp = hashMap.keyPointer(1);
+    kp.set(1);
 }
