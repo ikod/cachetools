@@ -52,7 +52,12 @@ begin
     end if
 end 
 */
-
+/**
+    2Q cache is variant of multi-level LRU cache. Original paper http://www.vldb.org/conf/1994/P439.PDF
+    It is adaptive, scan-resistant and can give more hits than plain LRU.
+    $(P This cache consists from three parts (In, Out and Main) where 'In' receive all new elements, 'Out' receives all
+    overflows from 'In', and 'Main' is LRU cache which hold all long-lived data.)
+**/
 class Cache2Q(K, V, Allocator=Mallocator)
 {
     private
@@ -92,6 +97,9 @@ class Cache2Q(K, V, Allocator=Mallocator)
         _OutMap.grow_factor(4);
         _MainMap.grow_factor(4);
     }
+    ///
+    /// Set total cache size. 'In' and 'Out' gets 1/6 of total size, Main gets 2/3 of size.
+    ///
     final auto size(uint s)
     {
         _kin =  1*s/6;
@@ -99,10 +107,16 @@ class Cache2Q(K, V, Allocator=Mallocator)
         _km =   4*s/6;
         return this;
     }
+    ///
+    /// Number of elements in cache.
+    ///
     final auto length() @safe
     {
         return _InMap.length + _OutMap.length + _MainMap.length;
     }
+    ///
+    /// Drop all elements from cache.
+    ///
     final void clear() @safe
     {
         _InList.clear();
@@ -112,6 +126,9 @@ class Cache2Q(K, V, Allocator=Mallocator)
         _OutMap.clear();
         _MainMap.clear();
     }
+    ///
+    /// Get element from cache.
+    ///
     final Nullable!V get(K k) @safe
     {
         debug(cachetools) safe_tracef("get %s", k);
@@ -167,6 +184,9 @@ class Cache2Q(K, V, Allocator=Mallocator)
 
         return Nullable!V();
     }
+    ///
+    /// Put element to cache.
+    ///
     final PutResult put(K k, V v) @safe
     out
     {
@@ -239,6 +259,9 @@ class Cache2Q(K, V, Allocator=Mallocator)
         }
         return PutResult(PutResultFlag.Inserted);
     }
+    ///
+    /// Remove element from cache.
+    ///
     final bool remove(K k) @safe
     {
         debug(cachetools) safe_tracef("remove from 2qcache key %s", k);
@@ -338,4 +361,16 @@ class Cache2Q(K, V, Allocator=Mallocator)
     cache.put(13, 13);  // in overflowed, out overflowed to main
     assert(cache.length==12, "expected 12, got %d".format(cache.length));
     globalLogLevel = LogLevel.info;
+}
+///
+///
+///
+@safe unittest
+{
+    auto cache = new Cache2Q!(int, string);
+    cache.size = 1024;
+    cache.put(1, "one");
+    assert(cache.get(1) == "one");
+    assert(cache.get(2).isNull);
+    assert(cache.length == 1);
 }

@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8"/>
+		<title>Class CacheLRU</title>
+		<link rel="stylesheet" type="text/css" href="../../styles/ddox.css"/>
+		<link rel="stylesheet" href="../../prettify/prettify.css" type="text/css"/>
+		<script type="text/javascript" src="../../scripts/jquery.js">/**/</script><script type="text/javascript" src="../../scripts/ddox.js">/**/</script>
+	</head>
+	<body onload="setupDdox();">
+		<nav id="main-nav">
+			<noscript>
+				<p style="color: red">The search functionality needs JavaScript enabled</p>
+			</noscript>
+			<div id="symbolSearchPane" style="display: none">
+				<form action="#" method="GET">
+					<input id="symbolSearch" type="text" name="q" placeholder="Search for symbols" autocomplete="off" onchange="performSymbolSearch(40);" onkeypress="this.onchange();" onpaste="this.onchange();" oninput="this.onchange();"/>
+				</form>
+				<ul id="symbolSearchResults" class="symbolList" style="display: none"></ul><script type="application/javascript" src="../../symbols.js"></script><script type="application/javascript">var symbolSearchRootDir = "../../";
+$('#symbolSearchPane').show();</script>
+			</div>
+			<ul class="tree-view">
+				<li class="tree-view ">
+					<div class="package ">cachetools
+					</div>
+			<ul class="tree-view">
+				<li class="tree-view collapsed">
+					<div class="package ">containers
+					</div>
+			<ul class="tree-view">
+				<li>
+					<div class="module ">
+						<a href="../../cachetools/containers/hashmap.html">hashmap</a>
+					</div>
+				</li>
+				<li>
+					<div class="module ">
+						<a href="../../cachetools/containers/lists.html">lists</a>
+					</div>
+				</li>
+			</ul>
+				</li>
+				<li>
+					<div class="module ">
+						<a href="../../cachetools/cache2q.html">cache2q</a>
+					</div>
+				</li>
+				<li>
+					<div class="module selected">
+						<a href="../../cachetools/cachelru.html">cachelru</a>
+					</div>
+				</li>
+				<li>
+					<div class="module ">
+						<a href="../../cachetools/interfaces.html">interfaces</a>
+					</div>
+				</li>
+			</ul>
+				</li>
+			</ul>
+		</nav>
+		<div id="main-contents">
+			<h1>Class CacheLRU</h1><p>CacheLRU contains maximum <code class="lang-d"><a href="../../cachetools/cachelru/CacheLRU.size.html"><span class="pln">size</span></a></code> items
+Eviction policy:
+1. evict TTL-ed entry (if TTL enabled), otherwise
+2. if oldest entry not expired - evict oldest accessed (LRU)
+</p>
+			<div class="prototype">
+				<code class="lang-d">
+					<div class="single-prototype">
+			<span class="kwd">class</span> <span class="typ">CacheLRU</span>(K, V, Allocator)
+			<span class="pun">;</span>
+					</div>
+				</code>
+			</div>
+			<section><p>User can be informed about evicted entries via cache event list.
+</p>
+
+
+<p>Implemented as HashMap and multi-dlist.
+</p>
+
+<p><b>HashMap</b> keeps <ol><li>cached value.</li>
+<li>pointer to dlist element.</li>
+<li>creation time (to check expiration and purge expired entry on get() without access to dlist).</li>
+</ol>
+</p>
+
+<p><b>dlist</b> keep key, creation timestamp (to check expiration) <ol><li>key, so that we can remove entries from hashmap for lists heads (AccessIndex and TimeIndex)</li>
+<li>creation time, so that we can check expiration for 'TimeIndex'</li>
+</ol>
+Each element in dlist have two sets of double-links - first set create order by access time, second set
+for creation time.
+</p>
+</section>
+
+			<section><h2>Methods</h2>
+				<table>
+					<col class="caption"/>
+					<tr>
+						<th>Name</th><th>Description</th>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/cachelru/CacheLRU.cacheEvents.html" class="public">
+								<code>cacheEvents</code>
+							</a>
+						</td>
+						<td></td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/cachelru/CacheLRU.clear.html" class="public">
+								<code>clear</code>
+							</a>
+						</td>
+						<td></td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/cachelru/CacheLRU.enableCacheEvents.html" class="public">
+								<code>enableCacheEvents</code>
+							</a>
+						</td>
+						<td></td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/cachelru/CacheLRU.get.html" class="public">
+								<code>get</code>
+							</a>
+						</td>
+						<td></td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/cachelru/CacheLRU.put.html" class="public">
+								<code>put</code>
+							</a>
+						</td>
+						<td></td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/cachelru/CacheLRU.remove.html" class="public">
+								<code>remove</code>
+							</a>
+						</td>
+						<td></td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/cachelru/CacheLRU.size.html" class="public">
+								<code>size</code>
+							</a>
+						</td>
+						<td></td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/cachelru/CacheLRU.ttl.html" class="public">
+								<code>ttl</code>
+							</a>
+						</td>
+						<td></td>
+					</tr>
+				</table>
+			</section>
+			<section><h2>Example</h2>
+
+<pre class="code"><code class="lang-d"><span class="kwd">import </span><span class="pln">core<wbr/></span><span class="pun">.</span><span class="pln">thread</span><span class="pun">;
+
+</span><span class="com">// very basic example
+</span><span class="kwd">auto </span><span class="pln">lru </span><span class="pun">= </span><span class="kwd">new </span><span class="typ">CacheLRU</span><span class="pun">!(</span><span class="typ">int</span><span class="pun">, </span><span class="typ">string</span><span class="pun">);
+
+</span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">size</span><span class="pun">(</span><span class="lit">4</span><span class="pun">)<wbr/>.</span><span class="pln">ttl</span><span class="pun">(</span><span class="lit">1</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">size </span><span class="pun">== </span><span class="lit">4</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">ttl </span><span class="pun">== </span><span class="lit">1</span><span class="pun">);
+
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">length </span><span class="pun">== </span><span class="lit">0</span><span class="pun">);
+</span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">put</span><span class="pun">(</span><span class="lit">1</span><span class="pun">, </span><span class="str">"one"</span><span class="pun">);
+</span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">put</span><span class="pun">(</span><span class="lit">2</span><span class="pun">, </span><span class="str">"two"</span><span class="pun">);
+</span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">put</span><span class="pun">(</span><span class="lit">3</span><span class="pun">, </span><span class="str">"three"</span><span class="pun">);
+</span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">put</span><span class="pun">(</span><span class="lit">4</span><span class="pun">, </span><span class="str">"four"</span><span class="pun">);
+
+</span><span class="kwd">auto </span><span class="pln">v </span><span class="pun">= </span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">get</span><span class="pun">(</span><span class="lit">2</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">v</span><span class="pun">==</span><span class="str">"two"</span><span class="pun">);
+</span><span class="pln">v </span><span class="pun">= </span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">get</span><span class="pun">(</span><span class="lit">4</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">v</span><span class="pun">==</span><span class="str">"four"</span><span class="pun">);
+
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">length </span><span class="pun">== </span><span class="lit">4</span><span class="pun">);
+</span><span class="com">// As we reached cache capacity, next `put` must evict oldest never accessed key '1'
+</span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">put</span><span class="pun">(</span><span class="lit">5</span><span class="pun">, </span><span class="str">"five"</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">length </span><span class="pun">== </span><span class="lit">4</span><span class="pun">);    </span><span class="com">// length did not changed
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">get</span><span class="pun">(</span><span class="lit">1</span><span class="pun">)<wbr/>.</span><span class="pln">isNull</span><span class="pun">);  </span><span class="com">// really evicted
+
+</span><span class="typ">Thread<wbr/></span><span class="pun">.</span><span class="pln">sleep</span><span class="pun">(</span><span class="lit">2<wbr/></span><span class="pun">.</span><span class="pln">seconds</span><span class="pun">);
+</span><span class="pln">v </span><span class="pun">= </span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">get</span><span class="pun">(</span><span class="lit">2</span><span class="pun">); </span><span class="com">// it must be expired by ttl
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">v<wbr/></span><span class="pun">.</span><span class="pln">isNull</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">length </span><span class="pun">== </span><span class="lit">3</span><span class="pun">);
+</span><span class="pln">v </span><span class="pun">= </span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">get</span><span class="pun">(</span><span class="lit">3</span><span class="pun">); </span><span class="com">// it must be expired by ttl too
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">v<wbr/></span><span class="pun">.</span><span class="pln">isNull</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">length </span><span class="pun">== </span><span class="lit">2</span><span class="pun">);
+</span></code></pre>
+</section>
+<section><h2>Example</h2>
+
+<pre class="code"><code class="lang-d"><span class="kwd">auto </span><span class="pln">lru </span><span class="pun">= </span><span class="kwd">new </span><span class="typ">CacheLRU</span><span class="pun">!(</span><span class="typ">int</span><span class="pun">, </span><span class="typ">string</span><span class="pun">);
+() </span><span class="kwd">@nogc @safe nothrow </span><span class="pun">{
+    </span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">enableCacheEvents</span><span class="pun">();
+    </span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">put</span><span class="pun">(</span><span class="lit">1</span><span class="pun">, </span><span class="str">"one"</span><span class="pun">);
+    </span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">get</span><span class="pun">(</span><span class="lit">1</span><span class="pun">) == </span><span class="str">"one"</span><span class="pun">);
+    </span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">put</span><span class="pun">(</span><span class="lit">1</span><span class="pun">, </span><span class="str">"next one"</span><span class="pun">);
+    </span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">get</span><span class="pun">(</span><span class="lit">1</span><span class="pun">) == </span><span class="str">"next one"</span><span class="pun">);
+    </span><span class="kwd">auto </span><span class="pln">events </span><span class="pun">= </span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">cacheEvents</span><span class="pun">();
+    </span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">events<wbr/></span><span class="pun">.</span><span class="pln">length </span><span class="pun">== </span><span class="lit">1</span><span class="pun">); </span><span class="com">// replaced old value
+    </span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">put</span><span class="pun">(</span><span class="lit">2</span><span class="pun">, </span><span class="str">"two"</span><span class="pun">);
+    </span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">clear</span><span class="pun">();
+    </span><span class="pln">events </span><span class="pun">= </span><span class="pln">lru<wbr/></span><span class="pun">.</span><span class="pln">cacheEvents</span><span class="pun">();
+    </span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">events<wbr/></span><span class="pun">.</span><span class="pln">length </span><span class="pun">== </span><span class="lit">2</span><span class="pun">); </span><span class="com">// removed keys 1 and 2 during clear()
+</span><span class="pun">}();
+</span></code></pre>
+</section>
+
+			<footer>
+				<table class="license-info">
+					<tr>
+						<th>Authors</th>
+						<td>
+							
+						</td>
+					</tr>
+					<tr>
+						<th>Copyright</th>
+						<td>
+							
+						</td>
+					</tr>
+					<tr>
+						<th>License</th>
+						<td>
+							
+						</td>
+					</tr>
+				</table>
+				<p class="faint">Generated using the DDOX documentation generator</p>
+			</footer>
+		</div>
+	</body>
+</html>

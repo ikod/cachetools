@@ -1,3 +1,4 @@
+///
 module cachetools.interfaces;
 
 import std.typecons;
@@ -13,6 +14,7 @@ private import cachetools.internal;
 // 3. eviction policy (condition to start/stop evinction)
 //
 
+///
 enum PutResultFlag
 {
     None,
@@ -20,6 +22,7 @@ enum PutResultFlag
     Replaced = 1 << 1,
     Evicted  = 1 << 2
 }
+///
 alias PutResult = BitFlags!PutResultFlag;
 
 // I failed to reach both goals: inheritance from interface and nogc/nothrow attribute neutrality

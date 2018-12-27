@@ -11,6 +11,10 @@ Limitations:
 * Cache implementations are not inherited from inerface or base class.
 This is because inheritance and attribute inference don't work together.
 
+### 2Q cache ###
+
+2Q cache is 
+
 ### LRU cache ###
 
 LRU cache keep limited number of items in memory. When adding new item to already full cache we have to evict some items.

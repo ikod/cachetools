@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8"/>
+		<title>Class Cache2Q</title>
+		<link rel="stylesheet" type="text/css" href="../../styles/ddox.css"/>
+		<link rel="stylesheet" href="../../prettify/prettify.css" type="text/css"/>
+		<script type="text/javascript" src="../../scripts/jquery.js">/**/</script><script type="text/javascript" src="../../scripts/ddox.js">/**/</script>
+	</head>
+	<body onload="setupDdox();">
+		<nav id="main-nav">
+			<noscript>
+				<p style="color: red">The search functionality needs JavaScript enabled</p>
+			</noscript>
+			<div id="symbolSearchPane" style="display: none">
+				<form action="#" method="GET">
+					<input id="symbolSearch" type="text" name="q" placeholder="Search for symbols" autocomplete="off" onchange="performSymbolSearch(40);" onkeypress="this.onchange();" onpaste="this.onchange();" oninput="this.onchange();"/>
+				</form>
+				<ul id="symbolSearchResults" class="symbolList" style="display: none"></ul><script type="application/javascript" src="../../symbols.js"></script><script type="application/javascript">var symbolSearchRootDir = "../../";
+$('#symbolSearchPane').show();</script>
+			</div>
+			<ul class="tree-view">
+				<li class="tree-view ">
+					<div class="package ">cachetools
+					</div>
+			<ul class="tree-view">
+				<li class="tree-view collapsed">
+					<div class="package ">containers
+					</div>
+			<ul class="tree-view">
+				<li>
+					<div class="module ">
+						<a href="../../cachetools/containers/hashmap.html">hashmap</a>
+					</div>
+				</li>
+				<li>
+					<div class="module ">
+						<a href="../../cachetools/containers/lists.html">lists</a>
+					</div>
+				</li>
+			</ul>
+				</li>
+				<li>
+					<div class="module selected">
+						<a href="../../cachetools/cache2q.html">cache2q</a>
+					</div>
+				</li>
+				<li>
+					<div class="module ">
+						<a href="../../cachetools/cachelru.html">cachelru</a>
+					</div>
+				</li>
+				<li>
+					<div class="module ">
+						<a href="../../cachetools/interfaces.html">interfaces</a>
+					</div>
+				</li>
+			</ul>
+				</li>
+			</ul>
+		</nav>
+		<div id="main-contents">
+			<h1>Class Cache2Q</h1><p>2Q cache is variant of multi-level LRU cache. Original paper http://www.vldb.org/conf/1994/P439.PDF
+    It is adaptive, scan-resistant and can give more hits than plain LRU.
+    <p>This cache consists from three parts (In, Out and Main) where 'In' receive all new elements, 'Out' receives all
+    overflows from 'In', and 'Main' is LRU cache which hold all long-lived data.</p>
+</p>
+			<div class="prototype">
+				<code class="lang-d">
+					<div class="single-prototype">
+			<span class="kwd">class</span> <span class="typ">Cache2Q</span>(K, V, Allocator)
+			<span class="pun">;</span>
+					</div>
+				</code>
+			</div>
+			
+			<section><h2>Methods</h2>
+				<table>
+					<col class="caption"/>
+					<tr>
+						<th>Name</th><th>Description</th>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/cache2q/Cache2Q.clear.html" class="public">
+								<code>clear</code>
+							</a>
+						</td>
+						<td>Drop all elements from cache.
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/cache2q/Cache2Q.get.html" class="public">
+								<code>get</code>
+							</a>
+						</td>
+						<td>Get element from cache.
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/cache2q/Cache2Q.length.html" class="public">
+								<code>length</code>
+							</a>
+						</td>
+						<td>Number of elements in cache.
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/cache2q/Cache2Q.put.html" class="public">
+								<code>put</code>
+							</a>
+						</td>
+						<td>Put element to cache.
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/cache2q/Cache2Q.remove.html" class="public">
+								<code>remove</code>
+							</a>
+						</td>
+						<td>Remove element from cache.
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/cache2q/Cache2Q.size.html" class="public">
+								<code>size</code>
+							</a>
+						</td>
+						<td>Set total cache size. 'In' and 'Out' gets 1/6 of total size, Main gets 2/3 of size.
+</td>
+					</tr>
+				</table>
+			</section>
+			<section><h2>Example</h2>
+
+<pre class="code"><code class="lang-d"><span class="kwd">auto </span><span class="pln">cache </span><span class="pun">= </span><span class="kwd">new </span><span class="typ">Cache2Q</span><span class="pun">!(</span><span class="typ">int</span><span class="pun">, </span><span class="typ">string</span><span class="pun">);
+</span><span class="pln">cache<wbr/></span><span class="pun">.</span><span class="pln">size </span><span class="pun">= </span><span class="lit">1024</span><span class="pun">;
+</span><span class="pln">cache<wbr/></span><span class="pun">.</span><span class="pln">put</span><span class="pun">(</span><span class="lit">1</span><span class="pun">, </span><span class="str">"one"</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">cache<wbr/></span><span class="pun">.</span><span class="pln">get</span><span class="pun">(</span><span class="lit">1</span><span class="pun">) == </span><span class="str">"one"</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">cache<wbr/></span><span class="pun">.</span><span class="pln">get</span><span class="pun">(</span><span class="lit">2</span><span class="pun">)<wbr/>.</span><span class="pln">isNull</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">cache<wbr/></span><span class="pun">.</span><span class="pln">length </span><span class="pun">== </span><span class="lit">1</span><span class="pun">);
+</span></code></pre>
+</section>
+
+			<footer>
+				<table class="license-info">
+					<tr>
+						<th>Authors</th>
+						<td>
+							
+						</td>
+					</tr>
+					<tr>
+						<th>Copyright</th>
+						<td>
+							
+						</td>
+					</tr>
+					<tr>
+						<th>License</th>
+						<td>
+							
+						</td>
+					</tr>
+				</table>
+				<p class="faint">Generated using the DDOX documentation generator</p>
+			</footer>
+		</div>
+	</body>
+</html>

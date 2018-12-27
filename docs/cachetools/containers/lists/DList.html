@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8"/>
+		<title>Struct DList</title>
+		<link rel="stylesheet" type="text/css" href="../../../styles/ddox.css"/>
+		<link rel="stylesheet" href="../../../prettify/prettify.css" type="text/css"/>
+		<script type="text/javascript" src="../../../scripts/jquery.js">/**/</script><script type="text/javascript" src="../../../scripts/ddox.js">/**/</script>
+	</head>
+	<body onload="setupDdox();">
+		<nav id="main-nav">
+			<noscript>
+				<p style="color: red">The search functionality needs JavaScript enabled</p>
+			</noscript>
+			<div id="symbolSearchPane" style="display: none">
+				<form action="#" method="GET">
+					<input id="symbolSearch" type="text" name="q" placeholder="Search for symbols" autocomplete="off" onchange="performSymbolSearch(40);" onkeypress="this.onchange();" onpaste="this.onchange();" oninput="this.onchange();"/>
+				</form>
+				<ul id="symbolSearchResults" class="symbolList" style="display: none"></ul><script type="application/javascript" src="../../../symbols.js"></script><script type="application/javascript">var symbolSearchRootDir = "../../../";
+$('#symbolSearchPane').show();</script>
+			</div>
+			<ul class="tree-view">
+				<li class="tree-view ">
+					<div class="package ">cachetools
+					</div>
+			<ul class="tree-view">
+				<li class="tree-view ">
+					<div class="package ">containers
+					</div>
+			<ul class="tree-view">
+				<li>
+					<div class="module ">
+						<a href="../../../cachetools/containers/hashmap.html">hashmap</a>
+					</div>
+				</li>
+				<li>
+					<div class="module selected">
+						<a href="../../../cachetools/containers/lists.html">lists</a>
+					</div>
+				</li>
+			</ul>
+				</li>
+				<li>
+					<div class="module ">
+						<a href="../../../cachetools/cache2q.html">cache2q</a>
+					</div>
+				</li>
+				<li>
+					<div class="module ">
+						<a href="../../../cachetools/cachelru.html">cachelru</a>
+					</div>
+				</li>
+				<li>
+					<div class="module ">
+						<a href="../../../cachetools/interfaces.html">interfaces</a>
+					</div>
+				</li>
+			</ul>
+				</li>
+			</ul>
+		</nav>
+		<div id="main-contents">
+			<h1>Struct DList</h1><p>Double linked list
+</p>
+			<div class="prototype">
+				<code class="lang-d">
+					<div class="single-prototype">
+			<span class="kwd">struct</span> <span class="typ">DList</span>(T, Allocator, <span class="typ">bool</span> GCRangesAllowed<span class="pln"> </span><span class="pun">= </span><span class="kwd">true</span>)
+			<span class="pun">;</span>
+					</div>
+				</code>
+			</div>
+			
+			<section><h2>Methods</h2>
+				<table>
+					<col class="caption"/>
+					<tr>
+						<th>Name</th><th>Description</th>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/lists/DList.clear.html" class="public">
+								<code>clear</code>
+							</a>
+						</td>
+						<td>remove all items from list
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/lists/DList.head.html" class="public">
+								<code>head</code>
+							</a>
+						</td>
+						<td>head node
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/lists/DList.insert_first.html" class="public">
+								<code>insert_first</code>
+							</a>
+						</td>
+						<td>insert item at list front
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/lists/DList.insert_last.html" class="public">
+								<code>insert_last</code>
+							</a>
+						</td>
+						<td>insert item at list back.
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/lists/DList.length.html" class="public">
+								<code>length</code>
+							</a>
+						</td>
+						<td>Number of items in list
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/lists/DList.move_to_head.html" class="public">
+								<code>move_to_head</code>
+							</a>
+						</td>
+						<td>move to head
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/lists/DList.move_to_tail.html" class="public">
+								<code>move_to_tail</code>
+							</a>
+						</td>
+						<td>move node to tail
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/lists/DList.popBack.html" class="public">
+								<code>popBack</code>
+							</a>
+						</td>
+						<td>pop last item.
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/lists/DList.popFront.html" class="public">
+								<code>popFront</code>
+							</a>
+						</td>
+						<td>pop front item.
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/lists/DList.range.html" class="public">
+								<code>range</code>
+							</a>
+						</td>
+						<td>Iterator over items
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/lists/DList.remove.html" class="public">
+								<code>remove</code>
+							</a>
+						</td>
+						<td>remove node by pointer. (safe until pointer is correct)
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/lists/DList.tail.html" class="public">
+								<code>tail</code>
+							</a>
+						</td>
+						<td>Tail node
+</td>
+					</tr>
+				</table>
+			</section>
+			<section><h2>Inner structs</h2>
+				<table>
+					<col class="caption"/>
+					<tr>
+						<th>Name</th><th>Description</th>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/lists/DList.Node.html" class="public">
+								<code>Node</code>
+							</a>
+						</td>
+						<td></td>
+					</tr>
+				</table>
+			</section>
+			<section><h2>Aliases</h2>
+				<table>
+					<col class="caption"/>
+					<tr>
+						<th>Name</th><th>Description</th>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/lists/DList.insertBack.html" class="public">
+								<code>insertBack</code>
+							</a>
+						</td>
+						<td>insert item at list back.
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/lists/DList.insertFront.html" class="public">
+								<code>insertFront</code>
+							</a>
+						</td>
+						<td>insert item at list front
+</td>
+					</tr>
+				</table>
+			</section>
+			
+			<footer>
+				<table class="license-info">
+					<tr>
+						<th>Authors</th>
+						<td>
+							
+						</td>
+					</tr>
+					<tr>
+						<th>Copyright</th>
+						<td>
+							
+						</td>
+					</tr>
+					<tr>
+						<th>License</th>
+						<td>
+							
+						</td>
+					</tr>
+				</table>
+				<p class="faint">Generated using the DDOX documentation generator</p>
+			</footer>
+		</div>
+	</body>
+</html>

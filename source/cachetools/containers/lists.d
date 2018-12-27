@@ -219,10 +219,13 @@ struct MultiDList(T, int N, Allocator = Mallocator, bool GCRangesAllowed = true)
     assert(bob.next(NameIndex) == alice);
 }
 
+/// Double linked list
 struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
     this(this) @disable;
 
+    ///
     struct Node(T) {
+        /// Node content.
         T payload;
         private Node!T* prev;
         private Node!T* next;
@@ -266,15 +269,17 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         clear();
     }
 
+    /// Iterator over items
     Range range() @safe {
         return Range(_head);
     }
 
+    /// Number of items in list
     ulong length() const pure nothrow @safe @nogc {
         return _length;
     }
 
-    void move_to_feelist(Node!T* n) @safe {
+    private void move_to_feelist(Node!T* n) @safe {
         if ( _freelist_len < _freelist_len_max )
         {
             n.next = _freelist;
@@ -292,7 +297,7 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
     }
 
-    Node!T* peek_from_freelist(ref T v) @safe {
+    private Node!T* peek_from_freelist(ref T v) @safe {
         if ( _freelist_len )
         {
             _freelist_len--;
@@ -314,7 +319,9 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
     }
 
+    /// insert item at list back.
     alias insertBack = insert_last;
+    /// ditto
     Node!T* insert_last(T v) @safe nothrow
     out {
         assert(_length>0);
@@ -335,7 +342,9 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         return n;
     }
 
+    /// insert item at list front
     alias insertFront = insert_first;
+    /// ditto
     Node!T* insert_first(T v) @safe nothrow
     out {
         assert(_length>0);
@@ -356,6 +365,7 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         return n;
     }
 
+    /// remove all items from list
     void clear() @safe {
         Node!T* n = _head, next;
         while(n)
@@ -386,6 +396,10 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         _head = _tail = _freelist = null;
     }
 
+    /** 
+        pop front item.
+        Returns: true if list was not empty
+    **/
     bool popFront() @safe {
         if ( _length == 0 )
         {
@@ -394,6 +408,10 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         return remove(_head);
     }
 
+    /** 
+        pop last item.
+        Returns: true if list was not empty
+    **/
     bool popBack() @safe {
         if ( _length == 0 )
         {
@@ -402,6 +420,7 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         return remove(_tail);
     }
 
+    /// remove node by pointer. (safe until pointer is correct)
     bool remove(Node!T* n) @safe @nogc
     in {assert(_length>0);}
     do {
@@ -422,6 +441,7 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         return true;
     }
 
+    /// move node to tail
     void move_to_tail(Node!T* n) @safe @nogc
     in {
         assert(_length > 0);
@@ -455,6 +475,7 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
 
     }
 
+    /// move to head
     void move_to_head(Node!T* n) @safe @nogc
     in {
         assert(_length > 0);
@@ -489,15 +510,23 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
 
     }
 
+    /** 
+        head node
+        Returns: pointer to head node
+    **/
     Node!T* head() @safe @nogc nothrow {
         return _head;
     }
 
+    /** Tail node
+        Returns: pointer to tail node.
+    */
     Node!T* tail() @safe @nogc nothrow {
         return _tail;
     }
 }
 
+///
 struct SList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
     this(this) @safe
     {
@@ -588,18 +617,19 @@ struct SList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
     }
 
+    /// number of items in list
     ulong length() const pure @nogc @safe nothrow {
         return _length;
     }
-
+    /// item empty?
     bool empty() @nogc @safe const {
         return _length == 0;
     }
-
+    /// front item
     T front() pure @nogc @safe {
         return _first.v;
     }
-
+    /// back item
     T back() pure @nogc @safe {
         return _last.v;
     }
@@ -646,7 +676,7 @@ struct SList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
             return n;
         }
     }
-
+    /// pop front item
     T popFront() @nogc @safe nothrow
     in { assert(_first !is null); }
     do {
@@ -660,6 +690,7 @@ struct SList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
         return v;
     }
+    /// clear everything
     void clear() @nogc @safe {
         _Node!T* n = _first;
         while( n !is null ) {
@@ -703,10 +734,11 @@ struct SList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
     }
     alias opSlice = range;
-    auto range() {
+    /// return range over list
+    Range!T range() {
         return Range!T(_first);
     }
-
+    /// insert item at front
     void insertFront(T v) @safe nothrow
     out{ assert(_first !is null && _last !is null);}
     do {
@@ -721,7 +753,7 @@ struct SList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
         _length++;
     }
-
+    /// insert item at back
     void insertBack(T v) @safe nothrow
     out{ assert(_first !is null && _last !is null);}
     do {
@@ -735,6 +767,7 @@ struct SList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         _last = n;
         _length++;
     }
+    /// remove items by predicate
     bool remove_by_predicate(scope bool delegate(T) @safe @nogc nothrow f) @nogc @trusted nothrow {
         bool removed;
         _Node!T *current = _first;
@@ -991,6 +1024,9 @@ private ubyte countBusy(ubyte[] m) @safe @nogc
     assert(equal(map, [0xfe, 0x00]), "got %s".format(map));
 }
 
+///
+/// Unrolled list
+///
 struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
 {
     alias allocator = Allocator.instance;
@@ -1005,10 +1041,11 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
 
     ///
     /// unrolled list with support only for:
-    /// 1) insert/delete front
-    /// 2) insert/delete back
-    /// 3) keep unstable "pointer" to arbitrary element
-    /// 4) remove element by pointer
+    /// 1. insert/delete front
+    /// 2. insert/delete back
+    /// 3. keep unstable "pointer" to arbitrary element
+    /// 4. remove element by pointer
+
     struct Page {
         ///
         /// Page is fixed-length array of list Nodes
@@ -1090,6 +1127,7 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
             return page is null;
         } 
     }
+    /// Iterator over items.
     Range range() @safe {
         return Range(_pages_first, -1);
     }
@@ -1146,6 +1184,7 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
         clear();
     }
 
+    /// remove anything from list
     void clear() @safe {
         _length = 0;
         Page* page = _pages_first, next;
@@ -1176,14 +1215,17 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
         _pages_first = _pages_last = _freelist = null;
     }
 
+    /// Is list empty?
     bool empty() @safe const {
         return _length == 0;
     }
 
+    /// Items in the list.
     ulong length() @safe const {
         return _length;
     }
 
+    /// remove node (by 'Pointer')
     void remove(ref NodePointer p) @system {
         if ( empty )
         {
@@ -1249,6 +1291,7 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
         debug(cachetools) safe_tracef("remove: page after: %s", *page);
     }
 
+    /// List front item
     T front() @safe {
         if ( empty )
         {
@@ -1263,6 +1306,7 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
         }
     }
 
+    /// Pop front item
     void popFront() @safe {
         if ( empty )
         {
@@ -1303,6 +1347,7 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
         debug(cachetools) safe_tracef("popfront: page after: %s", *page);
     }
 
+    /// Insert item at front.
     NodePointer insertFront(T v) @safe {
         _length++;
         Page* page = _pages_first;
@@ -1342,6 +1387,7 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
         return NodePointer(page, index);
     }
 
+    /// List back item.
     T back() @safe {
         if ( empty )
         {
@@ -1357,6 +1403,7 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
         }
     }
 
+    /// Pop back item from list.
     void popBack() @safe {
         if ( empty )
         {
@@ -1396,6 +1443,7 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
         }
     }
 
+    /// Insert item back.
     NodePointer insertBack(T v) @safe {
         _length++;
         Page* page = _pages_last;
@@ -1436,6 +1484,7 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
     }
 }
 
+///
 @safe unittest
 {
     import std.experimental.logger;
