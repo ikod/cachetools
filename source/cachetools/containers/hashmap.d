@@ -553,6 +553,7 @@ package struct ChainedHashMap(K, V, Allocator = Mallocator)
 
 }
 */
+///
 struct HashMap(K, V, Allocator = Mallocator) {
 
     enum initial_buckets_num = 32;
@@ -678,6 +679,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         }
     }
 
+    ///
     public KeyPointer keyPointer(K key) @safe {
 
         if ( !_buckets_num ) {
@@ -871,6 +873,8 @@ struct HashMap(K, V, Allocator = Mallocator) {
     ///
     /// Lookup methods
     ///
+
+    /// 'in' 
     V* opBinaryRight(string op)(in K k) @safe if (op == "in")
     {
 
@@ -900,6 +904,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         }
     }
 
+    ///
     ref V getOrAdd(T)(K k, T defaultValue) @safe
     {
         V* v = k in this;
@@ -921,11 +926,15 @@ struct HashMap(K, V, Allocator = Mallocator) {
         }
     }
 
+    ///
     alias require = getOrAdd;
 
+    ///
     auto grow_factor() const @safe {
         return _grow_factor;
     }
+
+    ///
     void grow_factor(int gf) @safe {
         if ( gf < 2 )
         {
@@ -945,7 +954,9 @@ struct HashMap(K, V, Allocator = Mallocator) {
         }
         _grow_factor = gf;
     }
+    /// get
     /// Attention: this can't return ref as default value can be rvalue
+    ///
     V get(T)(K k, T defaultValue) @safe
     {
         V* v = k in this;
@@ -968,6 +979,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
     }
 
     ///
+    /// map[key]
     /// Attention: you can't use this method in @nogc code.
     /// Usual aa[key] method.
     /// Throws exception if key not found
@@ -1133,6 +1145,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         }
         return true;
     }
+    ///
     void clear() @safe 
     {
         if ( _buckets_num > 0 )
@@ -1166,16 +1179,19 @@ struct HashMap(K, V, Allocator = Mallocator) {
         _buckets = null;
         _allocated = _deleted = _empty = _buckets_num = 0;
     }
+    ///
     auto length() const pure nothrow @nogc @safe
     {
         return _allocated;
     }
 
+    ///
     auto size() const pure nothrow @nogc @safe
     {
         return _buckets_num;
     }
 
+    ///
     auto byKey() pure @safe @nogc
     {
         struct _kvRange {
@@ -1211,6 +1227,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         return _kvRange(_buckets);
     }
 
+    ///
     auto byValue() pure @safe {
         struct _kvRange {
             int         _pos;
@@ -1252,6 +1269,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         return _kvRange(_buckets);
     }
 
+    ///
     auto byPair() pure @safe
     {
         import std.typecons;
