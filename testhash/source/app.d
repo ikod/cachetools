@@ -1062,7 +1062,10 @@ void main()
         gcstart = () @trusted {return GC.stats;}();
 
         auto c = new Cache2Q!(string, int);
-        c.size = 1024;
+        //c.size = 1024;
+        c.sizeMain = 850;
+        c.sizeIn = 32;
+        c.sizeOut = 1024-32-850;
         hits = 0;
         foreach(_;0..2)
             foreach(w; words.range()) {
@@ -1085,6 +1088,9 @@ void main()
 
         auto c = new Cache2Q!(string, int, GCAllocator);
         c.size = 1024;
+        c.sizeMain = 850;
+        c.sizeIn = 32;
+        c.sizeOut = 1024-32-850;
         hits = 0;
         foreach(_;0..2)
             foreach(w; words.range()) {

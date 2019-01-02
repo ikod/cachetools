@@ -61,3 +61,42 @@ struct CacheEvent(K, V)
     StoredType!K    key;
     StoredType!V    val;
 }
+
+struct TTL {
+    import core.stdc.time;
+    //
+    // Can have three values
+    // 1) use default - __ttl = 0
+    // 2) no ttl      - __ttl = -1
+    // 3) some value  - __ttl > 0
+    //
+    private time_t  __ttl = 0;
+
+    bool disabled() pure const nothrow @nogc @safe {
+        return __ttl < 0;
+    }
+    bool useDefault() pure const nothrow @nogc @safe {
+        return __ttl == 0;
+    }
+    time_t value() pure const nothrow @nogc @safe {
+        return __ttl;
+    }
+    TTL opUnary(string op)() pure nothrow @safe @nogc if (op == "~")
+    {
+        return TTL(-1);
+    }
+    /**
+    / Constructor
+    / Parameters:
+    / v - ttl value (0 - use default value or no ttl if there is no defaults)
+    */
+    this(int v) pure nothrow @safe @nogc {
+        if ( v < 0 ) {
+            __ttl = -1;
+        }
+        else
+        {
+            __ttl = v;
+        }
+    }
+}
