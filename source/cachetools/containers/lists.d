@@ -510,6 +510,7 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
 
     }
 
+    alias front = head;
     /** 
         head node
         Returns: pointer to head node
@@ -518,6 +519,7 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         return _head;
     }
 
+    alias back = tail;
     /** Tail node
         Returns: pointer to tail node.
     */
@@ -553,11 +555,14 @@ struct SList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
         _first = __newFirst;
         _last = __newLast;
+        _freelist = null;
+        _freelist_len = 0;
     }
 
     void opAssign(typeof(this) other) @safe
     {
         // copy items
+        debug(cachetools) safe_tracef("opAssign SList");
         _Node!T* __newFirst, __newLast;
         auto f = other._first;
         while(f)
@@ -581,6 +586,8 @@ struct SList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         _first = __newFirst;
         _last = __newLast;
         _length = other._length;
+        _freelist = null;
+        _freelist_len = 0;
     }
 
     ~this() @safe {
