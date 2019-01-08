@@ -46,13 +46,12 @@ class CacheLRU(K, V, Allocator = Mallocator)
         enum size_t AccessIndex = 0;
         enum size_t TimeIndex = 1;
         struct ListElement {
-            K                   key;    // we keep key here so we can remove element from map when we evict with LRU or TTL)
-            time_t              ts;     // creation (we keep it here to check expiration for oldest element)
+            K                   key;        // we keep key here so we can remove element from map when we evict with LRU or TTL)
+            time_t              expired_at; // creation (we keep it here to check expiration for oldest element)
         }
         struct MapElement {
-            StoredType!V        value;  // value
-            //ushort              hits;   // accesses
-            time_t              ts;     // creation (wee keep it here to check expiration on access)
+            StoredType!V        value;          // value
+            time_t              expired_at;     // expiration time or null
             ListElementPtr      list_element_ptr;
         }
 
@@ -71,41 +70,46 @@ class CacheLRU(K, V, Allocator = Mallocator)
     final this() @safe {
         __map.grow_factor(4);
     }
-    struct CacheEventRange(K,V)
+    struct CacheEventRange(K, V)
     {
 
-        private SList!(CacheEvent!(K,V), Allocator) __events;
+        private SList!(CacheEvent!(K, V), Allocator) __events;
 
-        ~this() @safe
-        {
-            __events.clear();
-        }
         void opAssign(CacheEventRange!(K, V) other) @safe
         {
             __events.clear();
             __events = other.__events;
         }
-        this(ref SList!(CacheEvent!(K,V), Allocator) events) @safe
+
+        this(ref SList!(CacheEvent!(K, V), Allocator) events) @safe
         {
-            import std.algorithm.mutation: swap;
-            swap(__events, events);
+            __events = events;
         }
+
         bool empty() @safe const nothrow pure
         {
             return __events.empty();
         }
+
         void popFront() @safe nothrow
         {
             __events.popFront();
         }
+
         auto front() @safe
         {
             return __events.front();
         }
+
         auto length() pure const nothrow @safe
         {
             return __events.length;
-        } 
+        }
+
+        auto save() @safe
+        {
+            return CacheEventRange!(K, V)(__events);
+        }
     }
     ///
     final Nullable!V get(K k) @safe
@@ -116,8 +120,9 @@ class CacheLRU(K, V, Allocator = Mallocator)
         {
             return Nullable!V();
         }
-        if  (__ttl > 0 && time(null) - store_ptr.ts >= __ttl )
+        if  (store_ptr.expired_at > 0 && time(null) >= store_ptr.expired_at )
         {
+            debug(cachetools) safe_tracef("remove expired entry");
             // remove expired entry
             if ( __reportCacheEvents )
             {
@@ -136,14 +141,24 @@ class CacheLRU(K, V, Allocator = Mallocator)
         return Nullable!V(store_ptr.value);
     }
     ///
-    final PutResult put(K k, V v) @safe
+    final PutResult put(K k, V v, TTL ttl = TTL()) @safe
     out
     {
         assert(__result != PutResult(PutResultFlag.None));
     }
     do
     {
+        time_t exp_time;
         time_t ts = time(null);
+
+        if (__ttl > 0 && ttl.useDefault)
+        {
+            exp_time = ts + __ttl;
+        }
+        if (ttl.value > 0)
+        {
+            exp_time = ts + ttl.value;
+        }
         PutResult result;
         auto store_ptr = k in __map;
         if ( !store_ptr ) // insert element
@@ -154,11 +169,11 @@ class CacheLRU(K, V, Allocator = Mallocator)
                 ListElementPtr e;
                 // we have to purge
                 // 1. check if oldest element is ttled
-                if ( __ttl > 0 && ts - __elements.head(TimeIndex).ts >= __ttl )
+                if ( __elements.head(TimeIndex).expired_at >= 0 && __elements.head(TimeIndex).expired_at <= ts )
                 {
                     // purge ttl-ed element
                     e = __elements.head(TimeIndex);
-                    debug(cachetools) safe_tracef("purging ttled %s", *e);
+                    debug(cachetools) safe_tracef("purging ttled %s, %s", *e, ts);
                 }
                 else
                 {
@@ -177,8 +192,8 @@ class CacheLRU(K, V, Allocator = Mallocator)
                 __elements.remove(e);
                 result |= PutResultFlag.Evicted;
             }
-            auto order_node = __elements.insert_last(ListElement(k, ts));
-            MapElement e = {value:v, ts: ts, list_element_ptr: order_node};
+            auto order_node = __elements.insert_last(ListElement(k, exp_time));
+            MapElement e = {value:v, expired_at: exp_time, list_element_ptr: order_node};
             __map.put(k, e);
         }
         else // update element
@@ -186,7 +201,7 @@ class CacheLRU(K, V, Allocator = Mallocator)
             result = PutResultFlag.Replaced;
             debug(cachetools) safe_tracef("update %s", *store_ptr);
             ListElementPtr e = store_ptr.list_element_ptr;
-            e.ts = ts;
+            e.expired_at = exp_time;
             __elements.move_to_tail(e, TimeIndex);
             if ( __reportCacheEvents )
             {
@@ -195,7 +210,7 @@ class CacheLRU(K, V, Allocator = Mallocator)
                 __events.insertBack(cache_event);
             }
             store_ptr.value = v;
-            store_ptr.ts = ts;
+            store_ptr.expired_at = exp_time;
         }
         return result;
     }
@@ -273,7 +288,9 @@ class CacheLRU(K, V, Allocator = Mallocator)
     ///
     final auto cacheEvents() @safe nothrow
     {
-        return CacheEventRange!(K,V)(__events);
+        auto r = CacheEventRange!(K, V)(__events);
+        __events.clear;
+        return r;
     }
 }
 
@@ -330,16 +347,16 @@ unittest
     lru.size(4).ttl(1).enableCacheEvents();
     assert(lru.size == 4);
     assert(lru.ttl == 1);
-
     assert(lru.length == 0);
+
     r = lru.put(1, "one"); assert(r == PutResult(PutResultFlag.Inserted));
     r = lru.put(2, "two"); assert(r == PutResult(PutResultFlag.Inserted));
-    auto v = lru.get(1);
+    auto v = lru.get(1);  // "1" should move to head
     assert(v=="one");
     r = lru.put(3, "three"); assert(r & PutResultFlag.Inserted);
     r = lru.put(4, "four"); assert(r & PutResultFlag.Inserted);
     assert(lru.length == 4);
-    // next put should purge...
+    // next put should evict "2"
     r = lru.put(5, "five"); assert(r == PutResult(PutResultFlag.Evicted, PutResultFlag.Inserted));
     () @trusted {Thread.sleep(2.seconds);}();
     v = lru.get(1); // it must be expired by ttl
@@ -358,7 +375,6 @@ unittest
     auto events = lru.cacheEvents();
     assert(!events.empty);
     assert(events.length() == 8);
-    assert(lru.__events.empty);
     assert(equal(events.map!"a.key", [2,1,3,7,6,7,5,4]));
     assert(equal(events.map!"a.val", ["two","one","three","seven", "six", "7", "five", "four"]));
 }
