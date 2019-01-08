@@ -62,25 +62,32 @@ struct CacheEvent(K, V)
     StoredType!V    val;
 }
 
+/**
+ * TTL encapsulate ttl for single cache item
+    1) use default - __ttl = 0
+    2) no ttl      - __ttl = -1
+    3) some value  - __ttl > 0
+ */
 struct TTL {
     import core.stdc.time;
-    //
-    // Can have three values
-    // 1) use default - __ttl = 0
-    // 2) no ttl      - __ttl = -1
-    // 3) some value  - __ttl > 0
-    //
+
     private time_t  __ttl = 0;
 
-    bool disabled() pure const nothrow @nogc @safe {
-        return __ttl < 0;
-    }
+    ///
+    /// True if this TTL means - use default value for this cache
+    ///
     bool useDefault() pure const nothrow @nogc @safe {
         return __ttl == 0;
     }
+    ///
+    /// return value encapsulated by this ttl
+    ///
     time_t value() pure const nothrow @nogc @safe {
         return __ttl;
     }
+    ///
+    /// Create "no ttl" - means do not use ttl with this entry
+    ///
     TTL opUnary(string op)() pure nothrow @safe @nogc if (op == "~")
     {
         return TTL(-1);
