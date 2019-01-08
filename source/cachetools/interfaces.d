@@ -64,9 +64,9 @@ struct CacheEvent(K, V)
 
 /**
  * TTL encapsulate ttl for single cache item
-    1) use default - __ttl = 0
-    2) no ttl      - __ttl = -1
-    3) some value  - __ttl > 0
+    1. use default - __ttl = 0
+    2. no ttl      - __ttl = -1
+    3. some value  - __ttl > 0
  */
 struct TTL {
     import core.stdc.time;

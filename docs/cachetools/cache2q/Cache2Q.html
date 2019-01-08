@@ -82,12 +82,28 @@ $('#symbolSearchPane').show();</script>
 					</tr>
 					<tr>
 						<td>
+							<a href="../../cachetools/cache2q/Cache2Q.cacheEvents.html" class="public">
+								<code>cacheEvents</code>
+							</a>
+						</td>
+						<td></td>
+					</tr>
+					<tr>
+						<td>
 							<a href="../../cachetools/cache2q/Cache2Q.clear.html" class="public">
 								<code>clear</code>
 							</a>
 						</td>
 						<td>Drop all elements from cache.
 </td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/cache2q/Cache2Q.enableCacheEvents.html" class="public">
+								<code>enableCacheEvents</code>
+							</a>
+						</td>
+						<td></td>
 					</tr>
 					<tr>
 						<td>
@@ -134,16 +150,61 @@ $('#symbolSearchPane').show();</script>
 						<td>Set total cache size. 'In' and 'Out' gets 1/6 of total size, Main gets 2/3 of size.
 </td>
 					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/cache2q/Cache2Q.sizeIn.html" class="public">
+								<code>sizeIn</code>
+							</a>
+						</td>
+						<td>Set In queue size
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/cache2q/Cache2Q.sizeMain.html" class="public">
+								<code>sizeMain</code>
+							</a>
+						</td>
+						<td>Set Main queue size
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/cache2q/Cache2Q.sizeOut.html" class="public">
+								<code>sizeOut</code>
+							</a>
+						</td>
+						<td>Set Out queue size
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/cache2q/Cache2Q.ttl.html" class="public">
+								<code>ttl</code>
+							</a>
+						</td>
+						<td>Set default ttl (seconds)
+</td>
+					</tr>
 				</table>
 			</section>
 			<section><h2>Example</h2>
 
-<pre class="code"><code class="lang-d"><span class="kwd">auto </span><span class="pln">cache </span><span class="pun">= </span><span class="kwd">new </span><span class="typ">Cache2Q</span><span class="pun">!(</span><span class="typ">int</span><span class="pun">, </span><span class="typ">string</span><span class="pun">);
-</span><span class="pln">cache<wbr/></span><span class="pun">.</span><span class="pln">size </span><span class="pun">= </span><span class="lit">1024</span><span class="pun">;
+<pre class="code"><code class="lang-d"><span class="pln">
+</span><span class="com">// create cache with total size 1024
+</span><span class="kwd">auto </span><span class="pln">cache </span><span class="pun">= () </span><span class="kwd">@trusted </span><span class="pun">{
+    </span><span class="kwd">auto </span><span class="pln">allocator </span><span class="pun">= </span><span class="typ">Mallocator<wbr/></span><span class="pun">.</span><span class="pln">instance</span><span class="pun">;
+    </span><span class="kwd">return </span><span class="pln">allocator<wbr/></span><span class="pun">.</span><span class="pln">make</span><span class="pun">!(</span><span class="typ">Cache2Q</span><span class="pun">!(</span><span class="typ">int</span><span class="pun">, </span><span class="typ">string</span><span class="pun">))(</span><span class="lit">1024</span><span class="pun">);
+}();
+
+</span><span class="pln">cache<wbr/></span><span class="pun">.</span><span class="pln">sizeIn </span><span class="pun">= </span><span class="lit">10</span><span class="pun">;              </span><span class="com">// if you need, later you can set any size for In queue
+</span><span class="pln">cache<wbr/></span><span class="pun">.</span><span class="pln">sizeOut </span><span class="pun">= </span><span class="lit">55</span><span class="pun">;             </span><span class="com">// and for out quque
+</span><span class="pln">cache<wbr/></span><span class="pun">.</span><span class="pln">sizeMain </span><span class="pun">= </span><span class="lit">600</span><span class="pun">;           </span><span class="com">// and for main cache
 </span><span class="pln">cache<wbr/></span><span class="pun">.</span><span class="pln">put</span><span class="pun">(</span><span class="lit">1</span><span class="pun">, </span><span class="str">"one"</span><span class="pun">);
-</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">cache<wbr/></span><span class="pun">.</span><span class="pln">get</span><span class="pun">(</span><span class="lit">1</span><span class="pun">) == </span><span class="str">"one"</span><span class="pun">);
-</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">cache<wbr/></span><span class="pun">.</span><span class="pln">get</span><span class="pun">(</span><span class="lit">2</span><span class="pun">)<wbr/>.</span><span class="pln">isNull</span><span class="pun">);
-</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">cache<wbr/></span><span class="pun">.</span><span class="pln">length </span><span class="pun">== </span><span class="lit">1</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">cache<wbr/></span><span class="pun">.</span><span class="pln">get</span><span class="pun">(</span><span class="lit">1</span><span class="pun">) == </span><span class="str">"one"</span><span class="pun">);  </span><span class="com">// key 1 is in cache
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">cache<wbr/></span><span class="pun">.</span><span class="pln">get</span><span class="pun">(</span><span class="lit">2</span><span class="pun">)<wbr/>.</span><span class="pln">isNull</span><span class="pun">);    </span><span class="com">// key 2 not in cache
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">cache<wbr/></span><span class="pun">.</span><span class="pln">length </span><span class="pun">== </span><span class="lit">1</span><span class="pun">);      </span><span class="com">// # of elements in cache
+</span><span class="pln">cache<wbr/></span><span class="pun">.</span><span class="pln">clear</span><span class="pun">;                    </span><span class="com">// clear cache
 </span></code></pre>
 </section>
 
