@@ -356,14 +356,15 @@ class Cache2Q(K, V, Allocator=Mallocator)
     do
     {
         time_t exp_time;
-        if ( _ttl > 0 && ttl.useDefault  )
-        {
+
+        if ( _ttl > 0 && ttl.useDefault  ) {
             exp_time = time(null) + _ttl;
         }
-        if ( ttl.value > 0 )
-        {
+
+        if ( ttl.value > 0 ) {
             exp_time = time(null) + ttl.value;
         }
+
         auto keyInMain = k in _MainMap;
         if ( keyInMain )
         {
@@ -653,6 +654,101 @@ unittest
     e = cache.cacheEvents;
     assert(e.length == 5);
     assert(e.map!(a => a.event).all!(a => a == EventType.Removed));
+
+    // test for clear from all queues
+    cache.sizeIn = 2;
+    cache.sizeOut = 2;
+    cache.sizeMain = 1;
+    cache.ttl = 0;
+    cache.put(1, 1);
+    cache.put(2, 2);
+    // in: 1, 2
+    cache.put(3, 3);
+    cache.put(4, 4);
+    // in: 3, 4
+    // out 1, 2
+    cache.get(1);
+    // in: 3, 4
+    // out 2
+    // main: 1
+    cache.put(5, 5);
+    // In: 4, 5
+    // Out: 2, 3
+    // Main: 1
+    cache.clear;
+    e = cache.cacheEvents;
+    assert(e.length == 5);
+    // test for eviction events from all queues
+    cache.put(1, 1);
+    cache.put(2, 2);
+    // in: 1, 2
+    cache.put(3, 3);
+    cache.put(4, 4);
+    // in: 3, 4
+    // out 1, 2
+    cache.get(1);
+    // in: 3, 4
+    // out 2
+    // main: 1
+    cache.put(5, 5);
+    // In: 4, 5
+    // Out: 2, 3
+    // Main: 1
+    cache.get(2); // 1 evicted and replaced by 2
+    // In: 4, 5
+    // Out: 3
+    // Main: 2
+    e = cache.cacheEvents;
+    assert(e.length == 1);
+    assert(e.front.key == 1);
+    assert(e.front.event == EventType.Evicted);
+    cache.put(4, 44, TTL(1)); // create 'updated' event in In queue
+    e = cache.cacheEvents;
+    assert(e.length == 1);
+    assert(e.front.key == 4);
+    assert(e.front.event == EventType.Updated);
+    cache.put(3, 33); // create 'updated' event in Out queue
+    e = cache.cacheEvents;
+    assert(e.length == 1);
+    assert(e.front.key == 3);
+    assert(e.front.event == EventType.Updated);
+    cache.put(2, 22); // create 'updated' event in In queue
+    e = cache.cacheEvents;
+    assert(e.length == 1);
+    assert(e.front.key == 2);
+    assert(e.front.event == EventType.Updated);
+    Thread.sleep(1.seconds);
+    // In: 4, 5
+    // Out: 3
+    // Main: 2
+    cache.put(6,6);     // now key '4' expired and must be dropped from In queue
+    e = cache.cacheEvents;
+    assert(e.length == 1);
+    assert(e.front.key == 4);
+    assert(e.front.event == EventType.Expired);
+    // In: 5, 6
+    // Out: 3
+    // Main: 2
+    cache.put(7, 7);
+    // In: 6, 7
+    // Out: 3, 5
+    // Main: 2
+    cache.put(8, 8);
+    // In: 7, 8
+    // Out: 5, 6 -> 3 evicted
+    // Main: 2
+    e = cache.cacheEvents;
+    assert(e.length == 1);
+    assert(e.front.key == 3);
+    assert(e.front.event == EventType.Evicted);
+    cache.remove(7); // remove from In
+    cache.remove(5); // remove from Out
+    cache.remove(2); // remove from main
+    cache.remove(0); // remove something that were not in cache
+    e = cache.cacheEvents;
+    assert(e.length == 3);
+    assert(e.all!(a => a.event == EventType.Removed));
+    assert(e.map!"a.key".array == [7,5,2]);
 }
 
 ///
