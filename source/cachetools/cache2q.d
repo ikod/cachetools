@@ -246,25 +246,23 @@ class Cache2Q(K, V, Allocator=Mallocator)
     {
         debug(cachetools) safe_tracef("get %s", k);
 
-        MainMapElement* keyInAm = k in _MainMap;
-        if ( keyInAm )
+        MainMapElement* keyInMain = k in _MainMap;
+        if ( keyInMain )
         {
-            debug(cachetools) safe_tracef("%s in main cache: %s", k, *keyInAm);
-            auto mapElement = *keyInAm;
-            if ( keyInAm.expired_at > 0 && keyInAm.expired_at <= time(null) ) 
+            debug(cachetools) safe_tracef("%s in main cache: %s", k, *keyInMain);
+            if ( keyInMain.expired_at > 0 && keyInMain.expired_at <= time(null) ) 
             {
                 // expired
                 if (__reportCacheEvents)
                 {
-                    __events.insertBack(CacheEvent!(K, V)(EventType.Expired, k, keyInAm.value));
+                    __events.insertBack(CacheEvent!(K, V)(EventType.Expired, k, keyInMain.value));
                 }
-                _MainList.remove(keyInAm.list_element_ptr);
+                _MainList.remove(keyInMain.list_element_ptr);
                 _MainMap.remove(k);
-                //
                 return Nullable!V();
             }
-            _MainList.move_to_head(mapElement.list_element_ptr);
-            return Nullable!V(mapElement.value);
+            _MainList.move_to_head(keyInMain.list_element_ptr);
+            return Nullable!V(keyInMain.value);
         }
         debug(cachetools) safe_tracef("%s not in main cache", k);
 
@@ -283,7 +281,6 @@ class Cache2Q(K, V, Allocator=Mallocator)
                     _OutList.remove(keyInOut.list_element_ptr);
                 }();
                 _OutMap.remove(k);
-                //
                 return Nullable!V();
             }
             // move from Out to Main
@@ -317,12 +314,12 @@ class Cache2Q(K, V, Allocator=Mallocator)
             }
             return Nullable!V(value);
         }
-        debug(cachetools) safe_tracef("%s not in A1Out cache", k);
+        debug(cachetools) safe_tracef("%s not in Out cache", k);
 
         auto keyInIn = k in _InMap;
         if ( keyInIn )
         {
-            debug(cachetools) safe_tracef("%s in A1In cache", k);
+            debug(cachetools) safe_tracef("%s in In cache", k);
             if (keyInIn.expired_at > 0 && keyInIn.expired_at <= time(null))
             {
                 // expired
@@ -333,20 +330,20 @@ class Cache2Q(K, V, Allocator=Mallocator)
                     _InList.remove(keyInIn.list_element_ptr);
                 }();
                 _InMap.remove(k);
-                //
                 return Nullable!V();
             }
-            MapElement mapElement = *keyInIn;
             // just return value
-            return Nullable!V(mapElement.value);
+            return Nullable!V(keyInIn.value);
         }
-        debug(cachetools) safe_tracef("%s not in A1In cache", k);
+        debug(cachetools) safe_tracef("%s not in In cache", k);
 
         return Nullable!V();
     }
 
     ///
     /// Put element to cache.
+    ///
+    /// Evict something if we have to.
     ///
     final PutResult put(K k, V v, TTL ttl = TTL()) @safe
     out
