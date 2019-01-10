@@ -682,11 +682,11 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
         return KeyPointer(&_buckets[placement_index], computed_hash, &this);
     }
-    /// Find allocated bucket for given key and computed hash starting from start_index
-    /// Returns: index if bucket found or hash_t.max otherwise
-    ///
-    /// Inherits @nogc from K opEquals()
-    ///
+    // Find allocated bucket for given key and computed hash starting from start_index
+    // Returns: index if bucket found or hash_t.max otherwise
+    //
+    // Inherits @nogc from K opEquals()
+    //
     private hash_t findEntryIndex(const hash_t start_index, const hash_t hash, in K key) pure const @safe
     in
     {
@@ -714,13 +714,13 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         return hash_t.max;
     }
 
-    ///
-    /// Find place where we can insert(DELETED or EMPTY bucket) or update existent (ALLOCATED)
-    /// bucket for key k and precomputed hash starting from start_index
-    ///
-    ///
-    /// Inherits @nogc from K opEquals()
-    ///
+    //
+    // Find place where we can insert(DELETED or EMPTY bucket) or update existent (ALLOCATED)
+    // bucket for key k and precomputed hash starting from start_index
+    //
+    //
+    // Inherits @nogc from K opEquals()
+    //
     private hash_t findUpdateIndex(const hash_t start_index, const hash_t computed_hash, in K key) pure const @safe
     in 
     {
@@ -750,10 +750,10 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         } while(index != start_index);
         return hash_t.max;
     }
-    ///
-    /// Find unallocated entry in the buckets slice
-    /// We use this function during resize() only.
-    ///
+    //
+    // Find unallocated entry in the buckets slice
+    // We use this function during resize() only.
+    //
     private long findEmptyIndexExtended(const hash_t start_index, in ref _Bucket[] buckets, int new_mask) pure const @safe @nogc
     in
     {
@@ -841,11 +841,13 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         debug(cachetools) safe_tracef("resizing done: new loadfactor: %s", (1.0*_allocated) / _buckets_num);
     }
 
-    ///
-    /// Lookup methods
-    ///
+    //
+    // Lookup methods
+    //
 
-    /// 'in' 
+    /// key in table
+    /// Returns: pointer to stored value (if key in table) or null 
+    ///
     V* opBinaryRight(string op)(in K k) @safe if (op == "in")
     {
 
@@ -868,6 +870,9 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
     }
 
+    ///
+    /// get value from hash or add if key is not in table. defaultValue can be callable.
+    /// Returns: ref to value (maybe added)
     ///
     ref V getOrAdd(T)(K k, T defaultValue) @safe
     {
@@ -893,12 +898,12 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     ///
     alias require = getOrAdd;
 
-    ///
+    /// get current grow factor.
     auto grow_factor() const @safe {
         return _grow_factor;
     }
 
-    ///
+    /// set grow factor (can be between 2, 4 or 8).
     void grow_factor(int gf) @safe {
         if ( gf < 2 )
         {
@@ -913,14 +918,14 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         // enforce new grow_factor is power of 2
         if ( popcnt(gf) > 1 )
         {
-            auto p = bsr(gf);
+            immutable p = bsr(gf);
             gf = 1 << (p+1);
         }
         _grow_factor = gf;
     }
     ///
     /// get
-    /// Return defaultValue if key not found.
+    /// Returns: value from hash, or defaultValue if key not found (see also getOrAdd).
     /// defaultValue can be callable.
     ///
     V get(T)(K k, T defaultValue) @safe
@@ -949,6 +954,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     /// Attention: you can't use this method in @nogc code.
     /// Usual aa[key] method.
     /// Throws exception if key not found
+    /// Returns: value for given key
     ///
     ref V opIndex(in K k) @safe
     {
@@ -961,7 +967,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     }
 
     ///
-    /// Modifiers
+    /// map[k] = v;
     ///
     void opIndexAssign(V v, K k) @safe
     {
@@ -969,8 +975,10 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     }
     ///
     /// put pair (k,v) into hash.
+    ///
     /// it must be @safe, it inherits @nogc properties from K and V
-    /// It can resize hashtable it is overloaded or has too much deleted entries
+    /// It can resize table if table is overloaded or has too much deleted entries.
+    /// Returns: pointer to placed value (pointer is valid until next resize).
     ///
     V* put(K k, V v) @safe
     out
@@ -1027,7 +1035,8 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     }
 
     ///
-    /// remomve key from hash, return true if actually removed
+    /// remomve key from hash.
+    /// Returns: true if actually removed, false otherwise.
     ///
     bool remove(K k) @safe {
 
@@ -1076,7 +1085,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
         return true;
     }
-    ///
+    /// throw away all keys
     void clear() @safe 
     {
         if ( _buckets_num > 0 )
@@ -1092,19 +1101,19 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         _buckets = null;
         _allocated = _deleted = _empty = _buckets_num = 0;
     }
-    ///
+    /// get numter of keys in table
     auto length() const pure nothrow @nogc @safe
     {
         return _allocated;
     }
 
-    ///
+    /// get current buckets number
     auto size() const pure nothrow @nogc @safe
     {
         return _buckets_num;
     }
 
-    ///
+    /// iterator by keys
     auto byKey() pure @safe @nogc
     {
         struct _kvRange {
@@ -1140,7 +1149,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         return _kvRange(_buckets);
     }
 
-    ///
+    /// iterator by values
     auto byValue() pure @safe {
         struct _kvRange {
             int         _pos;
@@ -1175,7 +1184,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         return _kvRange(_buckets);
     }
 
-    ///
+    /// iterator by key/value pairs
     auto byPair() pure @safe
     {
         import std.typecons;
@@ -1215,7 +1224,48 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     }
 }
 
-/// Tests
+/// Example
+@safe unittest {
+    import std.range;
+    import std.algorithm;
+
+    HashMap!(string, int) counter;
+    string[] words = ["hello", "this", "simple", "example", "should", "succeed", "or", "it", "should", "fail"];
+    // count words, simplest and fastest way
+    foreach (word; words)
+    {
+        counter.getOrAdd(word, 0)++;
+    }
+    assert("world" !in counter);
+    assert(counter["hello"] == 1);
+    assert(counter["should"] == 2);
+    assert(counter.length == words.length - 1);
+    // clear counter
+    counter.clear;
+    assert(counter.length == 0);
+    // more verbose way to count
+    foreach (word; words)
+    {
+        auto w = word in counter;
+        if (w)
+        {
+            (*w)++;
+        }
+        else
+        {
+            counter[word] = 1;
+        }
+    }
+    assert("world" !in counter);
+    assert(counter["hello"] == 1);
+    assert(counter["should"] == 2);
+    assert(counter.length == words.length - 1);
+    // iterators
+    assert(counter.byKey.count == counter.byValue.count);
+    assert(words.all!(w => w in counter));          // all words are in table
+    assert(counter.byValue.sum == words.length);    // sum of counters must equals to number of words
+}
+// Tests
 @safe unittest
 {
     // test of nogc getOrAdd
@@ -1333,7 +1383,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
 }
 
 
-/// test immutable struct and class as Key type
+// test immutable struct and class as Key type
 @safe unittest
 {
     import std.experimental.logger;
@@ -1580,8 +1630,8 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     }();
 }
 
-/// Test if we can work with non-@nogc opEquals for class-key.
-/// opEquals anyway must be non-@system.
+// Test if we can work with non-@nogc opEquals for class-key.
+// opEquals anyway must be non-@system.
 @safe nothrow unittest
 {
     class c {
@@ -1616,9 +1666,9 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     h.put(k0, v0);
     assert(!keyEquals(k0, k1));
 }
-///
-/// test byKey, byValue, byPair
-///
+//
+// test byKey, byValue, byPair
+//
 @safe nothrow unittest
 {
     import std.algorithm;
@@ -1646,9 +1696,9 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     m.remove(2);
     assert(m.byPair.map!"tuple(a.key, a.value)".array.sort.length() == 0);
 }
-/// 
-/// compare equivalence to AA
-///
+// 
+// compare equivalence to AA
+//
 /* not @safe because of AA */ unittest {
     import std.random;
     import std.array;
@@ -1674,9 +1724,9 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     assert(equal(AA.values().sort(), hashMap.byValue().array.sort()));
     assert(AA.length == hashMap.length);
 }
-///
-/// check remove
-///
+//
+// check remove
+//
 @safe unittest
 {
     // test removal while iterating
@@ -1704,9 +1754,9 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     }
     assert(hashMap.length == 0);
 }
-///
-/// test clear
-///
+//
+// test clear
+//
 @safe @nogc nothrow unittest
 {
     // test clear
@@ -1721,9 +1771,9 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     hashMap[1] = 1;
     assert(1 in hashMap && hashMap.length == 1);
 }
-///
-/// test getOrAdd with value
-///
+//
+// test getOrAdd with value
+//
 @safe @nogc nothrow unittest
 {
     // test of nogc getOrAdd
@@ -1737,9 +1787,9 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     assert(-1 in hashMap && v == -1);
 }
 
-///
-/// test getOrAdd with callable
-///
+//
+// test getOrAdd with callable
+//
 @safe @nogc nothrow unittest
 {
     // test of nogc getOrAdd with lazy default value
@@ -1756,9 +1806,9 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     assert(hashMap.get(-3, () => 0) == 0);  // ditto
 }
 
-///
-/// test getOrAdd with complex  data
-///
+//
+// test getOrAdd with complex  data
+//
 @safe unittest
 {
     import std.socket, std.meta;
@@ -1775,9 +1825,9 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
     }
 }
-///
-/// test with real class (socket)
-///
+//
+// test with real class (socket)
+//
 @safe unittest
 {
     import std.socket;
@@ -1834,9 +1884,9 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
     }
 }
-///
-/// test if we can handle some exotic value type
-///
+//
+// test if we can handle some exotic value type
+//
 @safe @nogc nothrow unittest
 {
     // test of nogc getOrAdd with lazy default value

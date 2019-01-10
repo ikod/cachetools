@@ -7,9 +7,6 @@
 <url><loc>http://127.0.0.1/cachetools/containers/hashmap/HashMap.byPair.html</loc></url>
 <url><loc>http://127.0.0.1/cachetools/containers/hashmap/HashMap.byValue.html</loc></url>
 <url><loc>http://127.0.0.1/cachetools/containers/hashmap/HashMap.clear.html</loc></url>
-<url><loc>http://127.0.0.1/cachetools/containers/hashmap/HashMap.findEmptyIndexExtended.html</loc></url>
-<url><loc>http://127.0.0.1/cachetools/containers/hashmap/HashMap.findEntryIndex.html</loc></url>
-<url><loc>http://127.0.0.1/cachetools/containers/hashmap/HashMap.findUpdateIndex.html</loc></url>
 <url><loc>http://127.0.0.1/cachetools/containers/hashmap/HashMap.get.html</loc></url>
 <url><loc>http://127.0.0.1/cachetools/containers/hashmap/HashMap.getOrAdd.html</loc></url>
 <url><loc>http://127.0.0.1/cachetools/containers/hashmap/HashMap.grow_factor.html</loc></url>

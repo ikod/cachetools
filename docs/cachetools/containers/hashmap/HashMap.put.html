@@ -61,8 +61,6 @@ $('#symbolSearchPane').show();</script>
 		</nav>
 		<div id="main-contents">
 			<h1>Function HashMap.put</h1><p>put pair (k,v) into hash.
-it must be @safe, it inherits @nogc properties from K and V
-It can resize hashtable it is overloaded or has too much deleted entries
 </p>
 			<div class="prototype">
 				<code class="lang-d">
@@ -78,9 +76,16 @@ It can resize hashtable it is overloaded or has too much deleted entries
 					</div>
 				</code>
 			</div>
-			<section></section>
+			<section><p>it must be @safe, it inherits @nogc properties from K and V
+It can resize table if table is overloaded or has too much deleted entries.
+</p>
+</section>
 
-			
+			<section><h2>Returns</h2>
+<p>pointer to placed value (pointer is valid until next resize).
+</p>
+</section>
+
 			<footer>
 				<table class="license-info">
 					<tr>
