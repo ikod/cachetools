@@ -47,3 +47,10 @@ bool UseGCRanges(Allocator, T, bool GCRangesAllowed)()
     import std.experimental.allocator.gc_allocator;
     return !is(Allocator==GCAllocator) && hasIndirections!T && GCRangesAllowed;
 }
+
+bool UseGCRanges(Allocator, K, V, bool GCRangesAllowed)()
+{
+    import std.experimental.allocator.gc_allocator;
+
+    return  !is(Allocator == GCAllocator) && (hasIndirections!K || hasIndirections!V ) && GCRangesAllowed;
+}
