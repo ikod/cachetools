@@ -2,7 +2,7 @@
 <html>
 	<head>
 		<meta charset="UTF-8"/>
-		<title>Function Cache2Q.put</title>
+		<title>Function TTL.value</title>
 		<link rel="stylesheet" type="text/css" href="../../styles/ddox.css"/>
 		<link rel="stylesheet" href="../../prettify/prettify.css" type="text/css"/>
 		<script type="text/javascript" src="../../scripts/jquery.js">/**/</script><script type="text/javascript" src="../../scripts/ddox.js">/**/</script>
@@ -41,7 +41,7 @@ $('#symbolSearchPane').show();</script>
 			</ul>
 				</li>
 				<li>
-					<div class="module selected">
+					<div class="module ">
 						<a href="../../cachetools/cache2q.html">cache2q</a>
 					</div>
 				</li>
@@ -51,7 +51,7 @@ $('#symbolSearchPane').show();</script>
 					</div>
 				</li>
 				<li>
-					<div class="module ">
+					<div class="module selected">
 						<a href="../../cachetools/interfaces.html">interfaces</a>
 					</div>
 				</li>
@@ -60,27 +60,16 @@ $('#symbolSearchPane').show();</script>
 			</ul>
 		</nav>
 		<div id="main-contents">
-			<h1>Function Cache2Q.put</h1><p>Put element to cache.
+			<h1>Function TTL.value</h1><p>return value encapsulated by this ttl
 </p>
 			<div class="prototype">
 				<code class="lang-d">
 					<div class="single-prototype">
-			<span class="kwd">final </span><a href="../../cachetools/interfaces/PutResult.html"><span class="typ">PutResult</span></a> <span class="pln">put</span>
-			<span class="pun">(</span>
-			<br/>
-			&nbsp;&nbsp;<span class="pln">K</span> <span class="pln">k</span><span class="pun">,</span>
-			<br/>
-			&nbsp;&nbsp;<span class="pln">V</span> <span class="pln">v</span><span class="pun">,</span>
-			<br/>
-			&nbsp;&nbsp;<a href="../../cachetools/interfaces/TTL.html"><span class="pln">TTL</span></a> <span class="pln">ttl</span> <span class="pun">=</span> <span class="pln">TTL</span><span class="pun">()</span>
-			<br/>
-			<span class="pun">)</span><span class="pln"> </span><span class="kwd">@safe</span><span class="pun">;</span>
+			<span class="typ">long</span> <span class="pln">value</span><span class="pun">(</span><span class="pun">)</span><span class="pln"> </span><span class="kwd">pure nothrow @nogc @safe const</span><span class="pun">;</span>
 					</div>
 				</code>
 			</div>
-			<section><p>Evict something if we have to.
-</p>
-</section>
+			<section></section>
 
 			
 			<footer>

@@ -2,7 +2,7 @@
 <html>
 	<head>
 		<meta charset="UTF-8"/>
-		<title>Function Cache2Q.put</title>
+		<title>Struct TTL</title>
 		<link rel="stylesheet" type="text/css" href="../../styles/ddox.css"/>
 		<link rel="stylesheet" href="../../prettify/prettify.css" type="text/css"/>
 		<script type="text/javascript" src="../../scripts/jquery.js">/**/</script><script type="text/javascript" src="../../scripts/ddox.js">/**/</script>
@@ -41,7 +41,7 @@ $('#symbolSearchPane').show();</script>
 			</ul>
 				</li>
 				<li>
-					<div class="module selected">
+					<div class="module ">
 						<a href="../../cachetools/cache2q.html">cache2q</a>
 					</div>
 				</li>
@@ -51,7 +51,7 @@ $('#symbolSearchPane').show();</script>
 					</div>
 				</li>
 				<li>
-					<div class="module ">
+					<div class="module selected">
 						<a href="../../cachetools/interfaces.html">interfaces</a>
 					</div>
 				</li>
@@ -60,28 +60,74 @@ $('#symbolSearchPane').show();</script>
 			</ul>
 		</nav>
 		<div id="main-contents">
-			<h1>Function Cache2Q.put</h1><p>Put element to cache.
+			<h1>Struct TTL</h1><p>TTL encapsulate ttl for single cache item
+    1. use default - _ttl = 0
+    2. no ttl      - _ttl = -1
+    3. some value  - _ttl &gt; 0
 </p>
 			<div class="prototype">
 				<code class="lang-d">
 					<div class="single-prototype">
-			<span class="kwd">final </span><a href="../../cachetools/interfaces/PutResult.html"><span class="typ">PutResult</span></a> <span class="pln">put</span>
-			<span class="pun">(</span>
-			<br/>
-			&nbsp;&nbsp;<span class="pln">K</span> <span class="pln">k</span><span class="pun">,</span>
-			<br/>
-			&nbsp;&nbsp;<span class="pln">V</span> <span class="pln">v</span><span class="pun">,</span>
-			<br/>
-			&nbsp;&nbsp;<a href="../../cachetools/interfaces/TTL.html"><span class="pln">TTL</span></a> <span class="pln">ttl</span> <span class="pun">=</span> <span class="pln">TTL</span><span class="pun">()</span>
-			<br/>
-			<span class="pun">)</span><span class="pln"> </span><span class="kwd">@safe</span><span class="pun">;</span>
+			<span class="kwd">struct</span> <span class="typ">TTL</span>
+			<span class="pun">;</span>
 					</div>
 				</code>
 			</div>
-			<section><p>Evict something if we have to.
-</p>
-</section>
-
+			
+			<section><h2>Constructors</h2>
+				<table>
+					<col class="caption"/>
+					<tr>
+						<th>Name</th><th>Description</th>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/interfaces/TTL.this.html" class="public">
+								<code>this</code>
+							</a>
+						</td>
+						<td>/ Constructor
+    / Parameters:
+    / v - ttl value (0 - use default value or no ttl if there is no defaults)
+</td>
+					</tr>
+				</table>
+			</section>
+			<section><h2>Methods</h2>
+				<table>
+					<col class="caption"/>
+					<tr>
+						<th>Name</th><th>Description</th>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/interfaces/TTL.opUnary.html" class="public">
+								<code>opUnary</code>
+							</a>
+						</td>
+						<td>Create "no ttl" - means do not use ttl with this entry
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/interfaces/TTL.useDefault.html" class="public">
+								<code>useDefault</code>
+							</a>
+						</td>
+						<td>True if this TTL means - use default value for this cache
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../cachetools/interfaces/TTL.value.html" class="public">
+								<code>value</code>
+							</a>
+						</td>
+						<td>return value encapsulated by this ttl
+</td>
+					</tr>
+				</table>
+			</section>
 			
 			<footer>
 				<table class="license-info">
