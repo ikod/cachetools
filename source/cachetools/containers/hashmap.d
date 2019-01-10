@@ -554,10 +554,9 @@ package struct ChainedHashMap(K, V, Allocator = Mallocator)
 }
 */
 ///
-struct HashMap(K, V, Allocator = Mallocator) {
+struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
 
     enum initial_buckets_num = 32;
-    enum inlineValues = true;//SmallValueFootprint!V() || is(V==class);
 
     alias StoredKeyType   = StoredType!K;
     alias StoredValueType = StoredType!V;
@@ -568,26 +567,12 @@ struct HashMap(K, V, Allocator = Mallocator) {
         struct _Bucket {
             hash_t          hash;
             StoredKeyType   key;
-            static if (inlineValues)
-            {
-                StoredValueType   value;
-            }
-            else
-            {
-                V*  value_ptr;
-            }
+            StoredValueType   value;
             string toString() const {
                 import std.format;
-                static if (inlineValues) {
-                    return "%s, hash: %0x,key: %s, value: %s".format(
-                        [EMPTY_HASH:"free", DELETED_HASH:"deleted", ALLOCATED_HASH:"allocated"][cast(long   )(hash & TYPE_MASK)],
-                        hash, key, value);
-                } else {
-                    return "%s, hash: %0x, key: %s, value: %s".format(
-                        [EMPTY_HASH:"free", DELETED_HASH:"deleted", ALLOCATED_HASH:"allocated"][cast(long)(hash & TYPE_MASK)],
-                        hash, key,
-                        value_ptr !is null?  format("%s", *value_ptr) : "-");
-                }
+                return "%s, hash: %0x,key: %s, value: %s".format(
+                    [EMPTY_HASH:"free", DELETED_HASH:"deleted", ALLOCATED_HASH:"allocated"][cast(long   )(hash & TYPE_MASK)],
+                    hash, key, value);
             }
         }
 
@@ -598,7 +583,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         int         _deleted;
         int         _empty;
 
-        int         _grow_factor = 2;
+        int         _grow_factor = 4;
 
     }
 
@@ -622,20 +607,13 @@ struct HashMap(K, V, Allocator = Mallocator) {
         }
 
         V get() {
-            static if ( inlineValues )
+            static if ( is(V==StoredValueType) )
             {
-                static if ( is(V==StoredValueType) )
-                {
-                    return _bucket.value;
-                }
-                else
-                {
-                    return cast(V)_bucket.value;
-                }
+                return _bucket.value;
             }
             else
             {
-                return *_bucket.value_ptr;
+                return cast(V)_bucket.value;
             }
         }
 
@@ -658,20 +636,13 @@ struct HashMap(K, V, Allocator = Mallocator) {
                 _bucket.hash = _hash;
                 check_overload = true;
             }
-            static if ( inlineValues )
+            static if ( is(V==StoredValueType) )
             {
-                static if ( is(V==StoredValueType) )
-                {
-                    _bucket.value = v;
-                }
-                else
-                {
-                    _bucket.value = cast(StoredValueType)v;
-                }
+                _bucket.value = v;
             }
             else
             {
-                return _bucket.value_ptr = v;
+                _bucket.value = cast(StoredValueType)v;
             }
             if ( check_overload && _map.tooHighLoad ) {
                 _map.doResize(_map._grow_factor * _map._buckets_num);
@@ -714,7 +685,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
     /// Find allocated bucket for given key and computed hash starting from start_index
     /// Returns: index if bucket found or hash_t.max otherwise
     ///
-    /// Inherits @nogc and from K opEquals()
+    /// Inherits @nogc from K opEquals()
     ///
     private hash_t findEntryIndex(const hash_t start_index, const hash_t hash, in K key) pure const @safe
     in
@@ -827,7 +798,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         immutable _new_mask = dest - 1;
         _Bucket[] _new_buckets = makeArray!(_Bucket)(allocator, _new_buckets_num);
 
-        static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+        static if ( UseGCRanges!(Allocator, K, V, GCRangesAllowed) ) {
             () @trusted
             {
                 GC.addRange(_new_buckets.ptr, _new_buckets_num * _Bucket.sizeof);
@@ -855,18 +826,18 @@ struct HashMap(K, V, Allocator = Mallocator) {
             _new_buckets[cast(hash_t)new_position] = _buckets[i];
         }
         () @trusted {
-            static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+            static if ( UseGCRanges!(Allocator, K, V, GCRangesAllowed) ) {
                GC.removeRange(_buckets.ptr);
             }
             dispose(allocator, _buckets.ptr);
         }();
         _buckets = _new_buckets;
         _buckets_num = _new_buckets_num;
-        assert(popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
         _mask = _buckets_num - 1;
         _deleted = 0;
         _empty = _buckets_num - _allocated;
 
+        assert(popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
         debug(cachetools) safe_tracef("resizing done: new loadfactor: %s", (1.0*_allocated) / _buckets_num);
     }
 
@@ -886,21 +857,14 @@ struct HashMap(K, V, Allocator = Mallocator) {
         if ( lookup_index == hash_t.max) {
             return null;
         }
-        static if ( inlineValues )
+        static if ( is(V==StoredValueType) )
         {
-            static if ( is(V==StoredValueType) )
-            {
-                return &_buckets[lookup_index].value;
-            }
-            else
-            {
-                V* r = () @trusted {return cast(V*)&_buckets[lookup_index].value;}();
-                return r;
-            }
+            return &_buckets[lookup_index].value;
         }
         else
         {
-            return _buckets[lookup_index].value_ptr;
+            V* r = () @trusted {return cast(V*)&_buckets[lookup_index].value;}();
+            return r;
         }
     }
 
@@ -954,8 +918,10 @@ struct HashMap(K, V, Allocator = Mallocator) {
         }
         _grow_factor = gf;
     }
+    ///
     /// get
-    /// Attention: this can't return ref as default value can be rvalue
+    /// Return defaultValue if key not found.
+    /// defaultValue can be callable.
     ///
     V get(T)(K k, T defaultValue) @safe
     {
@@ -1018,7 +984,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
             _mask = _buckets_num - 1;
             _buckets = makeArray!(_Bucket)(allocator, _buckets_num);
             () @trusted {
-                static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
+                static if ( UseGCRanges!(Allocator, K, V, GCRangesAllowed) ) {
                     GC.addRange(_buckets.ptr, _buckets_num * _Bucket.sizeof);
                 }
             }();
@@ -1034,7 +1000,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
         immutable computed_hash = hash_function(k) & HASH_MASK;
         immutable start_index = computed_hash & _mask;
         immutable placement_index = findUpdateIndex(start_index, computed_hash, k);
-        assert(placement_index >= 0);
+
         _Bucket* bucket = &_buckets[placement_index];
         immutable h = bucket.hash;
 
@@ -1045,33 +1011,15 @@ struct HashMap(K, V, Allocator = Mallocator) {
             _allocated++;
             _empty--;
         }
-        static if ( inlineValues )
+        debug(cachetools) safe_tracef("place inline buckets[%d] '%s'='%s'", placement_index, k, v);
+        bucket.value = v;
+        static if ( is(V==StoredValueType) )
         {
-            debug(cachetools) safe_tracef("place inline buckets[%d] '%s'='%s'", placement_index, k, v);
-            bucket.value = v;
-            static if ( is(V==StoredValueType) )
-            {
-                r = &bucket.value;
-            }
-            else
-            {
-                () @trusted {r = cast(V*)&bucket.value;}();
-            }
+            r = &bucket.value;
         }
         else
         {
-            debug(cachetools) safe_tracef("place with allocation buckets[%d] '%s'='%s'", placement_index, k, v);
-            if ( (bucket.hash & TYPE_MASK) == ALLOCATED_HASH )
-            {
-                // we just replace what we already allocated
-                r = (bucket.value_ptr);
-                *r = v;
-            }
-            else
-            {
-                r = bucket.value_ptr = make!(V)(allocator);
-                *r = v;
-            }
+            () @trusted {r = cast(V*)&bucket.value;}();
         }
         bucket.hash = computed_hash | ALLOCATED_HASH;
         bucket.key = k;
@@ -1101,23 +1049,6 @@ struct HashMap(K, V, Allocator = Mallocator) {
         }
 
         assert((_buckets[lookup_index].hash & TYPE_MASK) == ALLOCATED_HASH, "tried to remove non allocated bucket");
-
-        static if ( inlineValues )
-        {
-            // what we have to do with removed values XXX?
-        }
-        else
-        {
-            // what we have to do with removed values XXX?
-            // free space
-            () @trusted {
-                static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
-                    GC.removeRange(_buckets[lookup_index].value_ptr);
-                }
-                dispose(allocator, _buckets[lookup_index].value_ptr);
-            }();
-            _buckets[lookup_index].value_ptr = null;
-        }
 
         _allocated--;
         immutable next_index = (lookup_index + 1) & _mask;
@@ -1150,30 +1081,12 @@ struct HashMap(K, V, Allocator = Mallocator) {
     {
         if ( _buckets_num > 0 )
         {
-            static if ( !inlineValues )
-            {
-                for(int i=0;i<_buckets_num;i++)
-                {
-                    auto t = _buckets[i].hash;
-                    if ( t <= DELETED_HASH )
-                    {
-                        continue;
-                    }
-                    () @trusted
-                    {
-                        static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
-                            GC.removeRange(_buckets[i].value_ptr);
-                        }
-                        dispose(allocator, _buckets[i].value_ptr);
-                    }();
-                }
-            }
-            (() @trusted {
+            () @trusted {
                 static if ( !is(Allocator == GCAllocator) && (UseGCRanges!K||UseGCRanges!V) ) {
                     GC.removeRange(_buckets.ptr);
                 }
                 dispose(allocator, _buckets.ptr);
-            })();
+            }();
         }
 
         _buckets = null;
@@ -1248,14 +1161,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
             }
 
             V front() {
-                static if (inlineValues)
-                {
-                    return _buckets[_pos].value;
-                }
-                else
-                {
-                    return *(_buckets[_pos].value_ptr);
-                }
+                return _buckets[_pos].value;
             }
 
             void popFront() pure nothrow @safe @nogc {
@@ -1294,14 +1200,7 @@ struct HashMap(K, V, Allocator = Mallocator) {
             }
             auto front() @safe
             {
-                static if (inlineValues)
-                {
-                    return Tuple!(K, "key", V, "value")(_buckets[_pos].key, _buckets[_pos].value);
-                }
-                else
-                {
-                    return Tuple!(K, "key", V, "value")(_buckets[_pos].key, *(_buckets[_pos].value_ptr));
-                }
+                return Tuple!(K, "key", V, "value")(_buckets[_pos].key, _buckets[_pos].value);
             }
             void popFront() pure nothrow @safe @nogc
             {
