@@ -1078,7 +1078,6 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
     struct NodePointer {
         private
         {
-            //uint    _epoque;
             Page*   _page;
             byte    _index;
         }
