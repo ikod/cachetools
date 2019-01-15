@@ -1101,9 +1101,9 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
         }
     }
 
-    private struct Range {
-        Page* page;
-        byte  index;
+    struct Range {
+        private Page* page;
+        private byte  index;
 
         T front() @safe {
             if ( page !is null && index == -1)
