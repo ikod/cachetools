@@ -3,6 +3,7 @@ module cachetools.interfaces;
 
 import std.typecons;
 import std.datetime;
+import core.time;
 import std.typecons;
 
 private import cachetools.internal;
@@ -90,15 +91,27 @@ struct TTL {
     ///
     TTL opUnary(string op)() pure nothrow @safe @nogc if (op == "~")
     {
-        return TTL(-1);
+        return TTL(-1.seconds);
     }
     /**
     / Constructor
     / Parameters:
     / v - ttl value (0 - use default value or no ttl if there is no defaults)
     */
-    this(int v) pure nothrow @safe @nogc {
-        if ( v < 0 ) {
+    this(Duration v) pure nothrow @safe @nogc {
+        if ( v.isNegative ) {
+            __ttl = -1;
+        }
+        else
+        {
+            __ttl = v.total!"seconds";
+        }
+    }
+    deprecated("Use TTL(Duration) instead")
+    this(int v) pure nothrow @safe @nogc
+    {
+        if ( v < 0 )
+        {
             __ttl = -1;
         }
         else

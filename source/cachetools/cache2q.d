@@ -600,8 +600,8 @@ unittest
     cache.sizeMain = 4;
     cache.enableCacheEvents;
 
-    cache.put(1, 1, TTL(1));
-    cache.put(2, 2, TTL(1));
+    cache.put(1, 1, TTL(1.seconds));
+    cache.put(2, 2, TTL(1.seconds));
     // in: 1, 2
     cache.put(3,3);
     cache.put(4,4);
@@ -611,7 +611,7 @@ unittest
     // in: 3, 4
     // out 2
     // main: 1
-    cache.put(5,5, TTL(1));
+    cache.put(5,5, TTL(1.seconds));
     // In: 4(-), 5(1)   //
     // Out: 2(1), 3(-)  // TTL in parens
     // Main: 1(1)       //
@@ -631,7 +631,7 @@ unittest
     cache.ttl = 1;
     cache.put(1, 1);            // default TTL - this must not survive 1s sleep
     cache.put(2, 2, ~TTL());    // no TTL, ignore default - this must survive any time 
-    cache.put(3, 3, TTL(2));    // set TTL for this item - this must not survive 2s
+    cache.put(3, 3, TTL(2.seconds));    // set TTL for this item - this must not survive 2s
     Thread.sleep(1000.msecs);
     assert(cache.get(1).isNull); // expired
     assert(cache.get(2) == 2);
@@ -699,7 +699,7 @@ unittest
     assert(e.length == 1);
     assert(e.front.key == 1);
     assert(e.front.event == EventType.Evicted);
-    cache.put(4, 44, TTL(1)); // create 'updated' event in In queue
+    cache.put(4, 44, TTL(1.seconds)); // create 'updated' event in In queue
     e = cache.cacheEvents;
     assert(e.length == 1);
     assert(e.front.key == 4);
