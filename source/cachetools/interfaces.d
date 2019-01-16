@@ -70,20 +70,20 @@ struct CacheEvent(K, V)
     3. some value  - __ttl > 0
  */
 struct TTL {
-    import core.stdc.time;
+    import core.time;
 
-    private time_t  __ttl = 0;
+    private Duration  __ttl = 0.seconds;
 
     ///
     /// True if this TTL means - use default value for this cache
     ///
     bool useDefault() pure const nothrow @nogc @safe {
-        return __ttl == 0;
+        return __ttl == 0.seconds;
     }
     ///
     /// return value encapsulated by this ttl
     ///
-    time_t value() pure const nothrow @nogc @safe {
+    Duration value() pure const nothrow @nogc @safe {
         return __ttl;
     }
     ///
@@ -99,24 +99,11 @@ struct TTL {
     / v - ttl value (0 - use default value or no ttl if there is no defaults)
     */
     this(Duration v) pure nothrow @safe @nogc {
-        if ( v.isNegative ) {
-            __ttl = -1;
-        }
-        else
-        {
-            __ttl = v.total!"seconds";
-        }
+        __ttl = v;
     }
     deprecated("Use TTL(Duration) instead")
     this(int v) pure nothrow @safe @nogc
     {
-        if ( v < 0 )
-        {
-            __ttl = -1;
-        }
-        else
-        {
-            __ttl = v;
-        }
+        __ttl = v.seconds;
     }
 }

@@ -6,7 +6,7 @@ module cachetools.cache2q;
 
 private import std.experimental.allocator;
 private import std.experimental.allocator.mallocator : Mallocator;
-private import core.stdc.time;
+private import core.time;
 private import std.typecons;
 
 private import cachetools.internal;
@@ -58,6 +58,9 @@ end
     $(P This cache consists from three parts (In, Out and Main) where 'In' receive all new elements, 'Out' receives all
     overflows from 'In', and 'Main' is LRU cache which hold all long-lived data.)
 **/
+
+alias TimeType = MonoTimeImpl!(ClockType.coarse);
+
 class Cache2Q(K, V, Allocator=Mallocator)
 {
     private
@@ -74,13 +77,13 @@ class Cache2Q(K, V, Allocator=Mallocator)
         {
             StoredType!V        value;
             ListElementPtrType  list_element_ptr;
-            time_t              expired_at;
+            TimeType            expired_at;
         }
         struct MainMapElement
         {
             StoredType!V         value;
             DListElementPtrType  list_element_ptr;
-            time_t               expired_at;
+            TimeType             expired_at;
         }
 
         int _kin, _kout, _km;
@@ -93,7 +96,7 @@ class Cache2Q(K, V, Allocator=Mallocator)
         HashMap!(K, MapElement, Allocator)          _OutMap;
         HashMap!(K, MainMapElement, Allocator)      _MainMap;
 
-        time_t                                      _ttl; // global ttl (if > 0)
+        Duration                                    _ttl; // global ttl (if > 0)
 
         bool                                        __reportCacheEvents;
         SList!(CacheEvent!(K, V), Allocator)        __events; // unbounded list of cache events
@@ -182,9 +185,14 @@ class Cache2Q(K, V, Allocator=Mallocator)
     ///
     /// Set default ttl (seconds)
     ///
-    final void ttl(time_t v) @safe 
+    final void ttl(Duration v) @safe
     {
         _ttl = v;
+    }
+    deprecated("Use ttl(Duration)")
+    final void ttl(int v) @safe
+    {
+        _ttl = v.seconds;
     }
     ///
     auto enableCacheEvents() pure nothrow @safe @nogc
@@ -250,7 +258,7 @@ class Cache2Q(K, V, Allocator=Mallocator)
         if ( keyInMain )
         {
             debug(cachetools) safe_tracef("%s in main cache: %s", k, *keyInMain);
-            if ( keyInMain.expired_at > 0 && keyInMain.expired_at <= time(null) ) 
+            if ( keyInMain.expired_at > TimeType.init && keyInMain.expired_at <= TimeType.currTime ) 
             {
                 // expired
                 if (__reportCacheEvents)
@@ -270,7 +278,7 @@ class Cache2Q(K, V, Allocator=Mallocator)
         if ( keyInOut )
         {
             debug(cachetools) safe_tracef("%s in A1Out cache: %s", k, *keyInOut);
-            if (keyInOut.expired_at > 0 && keyInOut.expired_at <= time(null))
+            if (keyInOut.expired_at > TimeType.init && keyInOut.expired_at <= TimeType.currTime)
             {
                 // expired
                 if (__reportCacheEvents)
@@ -320,7 +328,7 @@ class Cache2Q(K, V, Allocator=Mallocator)
         if ( keyInIn )
         {
             debug(cachetools) safe_tracef("%s in In cache", k);
-            if (keyInIn.expired_at > 0 && keyInIn.expired_at <= time(null))
+            if (keyInIn.expired_at > TimeType.init && keyInIn.expired_at <= TimeType.currTime)
             {
                 // expired
                 if (__reportCacheEvents) {
@@ -352,14 +360,14 @@ class Cache2Q(K, V, Allocator=Mallocator)
     }
     do
     {
-        time_t exp_time;
+        TimeType exp_time;
 
-        if ( _ttl > 0 && ttl.useDefault  ) {
-            exp_time = time(null) + _ttl;
+        if ( _ttl > 0.seconds && ttl.useDefault  ) {
+            exp_time = TimeType.currTime + _ttl;
         }
 
-        if ( ttl.value > 0 ) {
-            exp_time = time(null) + ttl.value;
+        if ( ttl.value > 0.seconds ) {
+            exp_time = TimeType.currTime + ttl.value;
         }
 
         auto keyInMain = k in _MainMap;
@@ -423,7 +431,7 @@ class Cache2Q(K, V, Allocator=Mallocator)
             assert(removed);
             assert(_InList.length == _InMap.length);
 
-            if ( toOutE > 0 && toOutE <= time(null) )
+            if ( toOutE > TimeType.init && toOutE <= TimeType.currTime )
             {
                 // expired, we done
                 if (__reportCacheEvents) {
@@ -628,7 +636,7 @@ unittest
     auto e = cache.cacheEvents;
     assert(e.filter!(a => a.event == EventType.Removed).count == 2);
     assert(e.filter!(a => a.event == EventType.Expired).count == 3);
-    cache.ttl = 1;
+    cache.ttl = 1.seconds;
     cache.put(1, 1);            // default TTL - this must not survive 1s sleep
     cache.put(2, 2, ~TTL());    // no TTL, ignore default - this must survive any time 
     cache.put(3, 3, TTL(2.seconds));    // set TTL for this item - this must not survive 2s
@@ -656,7 +664,7 @@ unittest
     cache.sizeIn = 2;
     cache.sizeOut = 2;
     cache.sizeMain = 1;
-    cache.ttl = 0;
+    cache.ttl = 0.seconds;
     cache.put(1, 1);
     cache.put(2, 2);
     // in: 1, 2

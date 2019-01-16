@@ -3,7 +3,7 @@ module cachetools.cachelru;
 
 import std.typecons;
 import std.exception;
-import core.stdc.time;
+import core.time;
 
 private import std.experimental.allocator;
 private import std.experimental.allocator.mallocator : Mallocator;
@@ -39,6 +39,8 @@ private import cachetools.containers.lists;
 /// for creation time.
 ///
 
+alias TimeType = MonoTimeImpl!(ClockType.coarse);
+
 class CacheLRU(K, V, Allocator = Mallocator)
 {
     private
@@ -47,11 +49,11 @@ class CacheLRU(K, V, Allocator = Mallocator)
         enum size_t TimeIndex = 1;
         struct ListElement {
             K                   key;        // we keep key here so we can remove element from map when we evict with LRU or TTL)
-            time_t              expired_at; // creation (we keep it here to check expiration for oldest element)
+            TimeType            expired_at; // creation (we keep it here to check expiration for oldest element)
         }
         struct MapElement {
             StoredType!V        value;          // value
-            time_t              expired_at;     // expiration time or null
+            TimeType            expired_at;     // expiration time or null
             ListElementPtr      list_element_ptr;
         }
 
@@ -63,9 +65,9 @@ class CacheLRU(K, V, Allocator = Mallocator)
         SList!(CacheEvent!(K,V), Allocator)     __events;   // unbounded list of cache events
 
         // configuration
-        size_t  __size = 1024;          // limit num of elements in cache
-        uint    __ttl;                  // use TTL if __ttl > 0
-        bool    __reportCacheEvents;    // will user read cache events?
+        size_t      __size = 1024;          // limit num of elements in cache
+        Duration    __ttl;                  // use TTL if __ttl > 0
+        bool        __reportCacheEvents;    // will user read cache events?
     }
     final this() @safe {
         __map.grow_factor(4);
@@ -120,7 +122,7 @@ class CacheLRU(K, V, Allocator = Mallocator)
         {
             return Nullable!V();
         }
-        if  (store_ptr.expired_at > 0 && time(null) >= store_ptr.expired_at )
+        if  (store_ptr.expired_at > TimeType.init && TimeType.currTime >= store_ptr.expired_at )
         {
             debug(cachetools) safe_tracef("remove expired entry");
             // remove expired entry
@@ -148,14 +150,14 @@ class CacheLRU(K, V, Allocator = Mallocator)
     }
     do
     {
-        time_t exp_time;
-        time_t ts = time(null);
+        TimeType exp_time;
+        TimeType ts = TimeType.currTime;
 
-        if (__ttl > 0 && ttl.useDefault)
+        if ( __ttl > 0.seconds && ttl.useDefault )
         {
             exp_time = ts + __ttl;
         }
-        if (ttl.value > 0)
+        if (ttl.value > 0.seconds)
         {
             exp_time = ts + ttl.value;
         }
@@ -169,7 +171,7 @@ class CacheLRU(K, V, Allocator = Mallocator)
                 ListElementPtr e;
                 // we have to purge
                 // 1. check if oldest element is ttled
-                if ( __elements.head(TimeIndex).expired_at >= 0 && __elements.head(TimeIndex).expired_at <= ts )
+                if ( __elements.head(TimeIndex).expired_at >= TimeType.init && __elements.head(TimeIndex).expired_at <= ts )
                 {
                     // purge ttl-ed element
                     e = __elements.head(TimeIndex);
@@ -268,19 +270,26 @@ class CacheLRU(K, V, Allocator = Mallocator)
         return __size;
     }
 
-    auto ttl(uint d) pure nothrow @safe @nogc
+    deprecated("Use ttl(Durauion) insteda")
+    final auto ttl(uint d) pure nothrow @safe @nogc
+    {
+        __ttl = d.seconds;
+        return this;
+    }
+
+    final auto ttl(Duration d) pure nothrow @safe @nogc
     {
         __ttl = d;
         return this;
     }
 
     ///
-    uint ttl() pure nothrow const @safe @nogc
+    final Duration ttl() pure nothrow const @safe @nogc
     {
         return __ttl;
     }
     ///
-    auto enableCacheEvents() pure nothrow @safe @nogc
+    final auto enableCacheEvents() pure nothrow @safe @nogc
     {
         __reportCacheEvents = true;
         return this;
@@ -302,9 +311,9 @@ unittest
     // very basic example
     auto lru = new CacheLRU!(int, string);
 
-    lru.size(4).ttl(1);
+    lru.size(4).ttl(1.seconds);
     assert(lru.size == 4);
-    assert(lru.ttl == 1);
+    assert(lru.ttl == 1.seconds);
 
     assert(lru.length == 0);
     lru.put(1, "one");
@@ -344,9 +353,9 @@ unittest
     PutResult r;
 
     auto lru = new CacheLRU!(int, string);
-    lru.size(4).ttl(1).enableCacheEvents();
+    lru.size(4).ttl(1.seconds).enableCacheEvents();
     assert(lru.size == 4);
-    assert(lru.ttl == 1);
+    assert(lru.ttl == 1.seconds);
     assert(lru.length == 0);
 
     r = lru.put(1, "one"); assert(r == PutResult(PutResultFlag.Inserted));
@@ -454,7 +463,7 @@ unittest
     auto lru = make!(Cache)(allocator);
 
     lru.size = 2048; // keep 2048 elements in cache
-    lru.ttl = 60;    // set 60 seconds TTL for items in cache
+    lru.ttl = 60.seconds;    // set 60 seconds TTL for items in cache
 
     lru.put(1, "one");
     auto v = lru.get(0);
