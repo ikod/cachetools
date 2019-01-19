@@ -103,6 +103,9 @@ class Cache2Q(K, V, Allocator=Mallocator)
 
     }
     final this() @safe {
+        _kin = 1080 / 6;
+        _kout = 1080 / 6;
+        _km = 2 * 1080 / 3;
         _InMap.grow_factor(4);
         _OutMap.grow_factor(4);
         _MainMap.grow_factor(4);
@@ -162,7 +165,7 @@ class Cache2Q(K, V, Allocator=Mallocator)
     ///
     /// Drop all elements from cache.
     ///
-    final void clear() @safe
+    final void clear()
     {
         _InList.clear();
         _OutList.clear();
@@ -201,7 +204,7 @@ class Cache2Q(K, V, Allocator=Mallocator)
         return this;
     }
     ///
-    final auto cacheEvents() @safe nothrow
+    final auto cacheEvents()
     {
         auto r = CacheEventRange!(K, V)(__events);
         __events.clear;
@@ -213,23 +216,23 @@ class Cache2Q(K, V, Allocator=Mallocator)
 
         private SList!(CacheEvent!(K, V), Allocator) __events;
 
-        void opAssign(CacheEventRange!(K, V) other) @safe
+        void opAssign(CacheEventRange!(K, V) other)
         {
             __events.clear();
             __events = other.__events;
         }
 
-        this(ref SList!(CacheEvent!(K, V), Allocator) events) @safe
+        this(ref SList!(CacheEvent!(K, V), Allocator) events)
         {
             __events = events;
         }
 
-        bool empty() @safe const nothrow pure
+        bool empty() const nothrow @safe
         {
             return __events.empty();
         }
 
-        void popFront() @safe nothrow
+        void popFront() nothrow
         {
             __events.popFront();
         }
@@ -243,14 +246,14 @@ class Cache2Q(K, V, Allocator=Mallocator)
         {
             return __events.length;
         }
-        auto save() @safe {
+        auto save() {
             return CacheEventRange!(K, V)(__events);
         }
     }
     ///
     /// Get element from cache.
     ///
-    final Nullable!V get(K k) @safe
+    final Nullable!V get(K k)
     {
         debug(cachetools) safe_tracef("get %s", k);
 
@@ -353,7 +356,7 @@ class Cache2Q(K, V, Allocator=Mallocator)
     ///
     /// Evict something if we have to.
     ///
-    final PutResult put(K k, V v, TTL ttl = TTL()) @safe
+    final PutResult put(K k, V v, TTL ttl = TTL())
     out
     {
         assert(__result != PutResult(PutResultFlag.None));
@@ -472,7 +475,7 @@ class Cache2Q(K, V, Allocator=Mallocator)
     ///
     /// Remove element from cache.
     ///
-    final bool remove(K k) @safe
+    final bool remove(K k)
     {
         debug(cachetools) safe_tracef("remove from 2qcache key %s", k);
         auto inIn = k in _InMap;
@@ -759,7 +762,7 @@ unittest
 ///
 ///
 ///
-@safe @nogc unittest
+@safe @nogc nothrow unittest
 {
 
     // create cache with total size 1024
@@ -776,4 +779,35 @@ unittest
     assert(cache.get(2).isNull);    // key 2 not in cache
     assert(cache.length == 1);      // # of elements in cache
     cache.clear;                    // clear cache
+}
+
+// test unsafe types
+unittest {
+    import std.variant;
+    import std.stdio;
+
+    alias UnsafeType = Algebraic!(int, string);
+    
+    auto c = new Cache2Q!(UnsafeType, int);
+    c.enableCacheEvents;
+
+    UnsafeType abc = "abc";
+    UnsafeType def = "abc";
+    UnsafeType one = 1;
+    c.put(abc, 1);
+    c.put(one, 2);
+    assert(abc == def);
+    assert(c.get(def) == 1);
+    assert(c.get(one) == 2);
+    c.remove(abc);
+    auto r = c.cacheEvents;
+    c.sizeMain = 100;
+    c.sizeIn = 100;
+    c.sizeOut = 100;
+    c.length;
+
+
+    import std.json;
+    auto csj = new Cache2Q!(string, JSONValue);
+    auto cjs = new Cache2Q!(JSONValue, string);
 }

@@ -651,7 +651,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     }
 
     ///
-    public KeyPointer keyPointer(K key) @safe {
+    public KeyPointer keyPointer(K key) {
 
         if ( !_buckets_num ) {
             _buckets_num = _empty = initial_buckets_num;
@@ -687,7 +687,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     //
     // Inherits @nogc from K opEquals()
     //
-    private hash_t findEntryIndex(const hash_t start_index, const hash_t hash, in K key) pure const @safe
+    private hash_t findEntryIndex(const hash_t start_index, const hash_t hash, in K key) const
     in
     {
         assert(hash < DELETED_HASH);        // we look for real hash
@@ -721,7 +721,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     //
     // Inherits @nogc from K opEquals()
     //
-    private hash_t findUpdateIndex(const hash_t start_index, const hash_t computed_hash, in K key) pure const @safe
+    private hash_t findUpdateIndex(const hash_t start_index, const hash_t computed_hash, in K key) const
     in 
     {
         assert(computed_hash < DELETED_HASH);
@@ -793,7 +793,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         return _allocated + (_allocated << 2) > _buckets_num << 2;
     }
 
-    private void doResize(int dest) @safe {
+    private void doResize(int dest) {
         immutable _new_buckets_num = dest;
         immutable _new_mask = dest - 1;
         _Bucket[] _new_buckets = makeArray!(_Bucket)(allocator, _new_buckets_num);
@@ -848,7 +848,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     /// key in table
     /// Returns: pointer to stored value (if key in table) or null 
     ///
-    V* opBinaryRight(string op)(in K k) @safe if (op == "in")
+    V* opBinaryRight(string op)(in K k) if (op == "in")
     {
 
         if ( _buckets_num == 0 ) return null;
@@ -874,7 +874,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     /// get value from hash or add if key is not in table. defaultValue can be callable.
     /// Returns: ref to value (maybe added)
     ///
-    ref V getOrAdd(T)(K k, T defaultValue) @safe
+    ref V getOrAdd(T)(K k, T defaultValue)
     {
         V* v = k in this;
         if ( v )
@@ -928,7 +928,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     /// Returns: value from hash, or defaultValue if key not found (see also getOrAdd).
     /// defaultValue can be callable.
     ///
-    V get(T)(K k, T defaultValue) @safe
+    V get(T)(K k, T defaultValue)
     {
         V* v = k in this;
         if ( v )
@@ -956,7 +956,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     /// Throws exception if key not found
     /// Returns: value for given key
     ///
-    ref V opIndex(in K k) @safe
+    ref V opIndex(in K k)
     {
         V* v = k in this;
         if ( v !is null )
@@ -969,7 +969,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     ///
     /// map[k] = v;
     ///
-    void opIndexAssign(V v, K k) @safe
+    void opIndexAssign(V v, K k)
     {
         put(k, v);
     }
@@ -980,7 +980,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     /// It can resize table if table is overloaded or has too much deleted entries.
     /// Returns: pointer to placed value (pointer is valid until next resize).
     ///
-    V* put(K k, V v) @safe
+    V* put(K k, V v)
     out
     {
         assert(__result !is null);
@@ -1038,7 +1038,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     /// remomve key from hash.
     /// Returns: true if actually removed, false otherwise.
     ///
-    bool remove(K k) @safe {
+    bool remove(K k) {
 
         if ( tooMuchDeleted ) {
             // do not shrink, just compact table
@@ -1960,4 +1960,42 @@ unittest
     hashMap.remove(1);
     kp = hashMap.keyPointer(1);
     kp.set(1);
+}
+
+// test unsafe types
+unittest {
+    import std.variant;
+    import std.stdio;
+    import std.algorithm;
+
+    alias UnsafeType = Algebraic!(int, string);
+
+    HashMap!(UnsafeType, string) unsafeKeyMap;
+    UnsafeType k = "one";
+    unsafeKeyMap[k] = "value one";
+    assert(k in unsafeKeyMap);
+    assert(unsafeKeyMap[k] == "value one");
+    k = 1;
+    assert(k !in unsafeKeyMap);
+    unsafeKeyMap[UnsafeType(2)] = "value two";
+    assert(unsafeKeyMap.getOrAdd(k, "value one 2") == "value one 2");
+    assert(unsafeKeyMap.get(k, "value one 3") == "value one 2");
+    assert(equal(unsafeKeyMap.byKey, unsafeKeyMap.byPair.map!"a.key"));
+    assert(equal(unsafeKeyMap.byValue, unsafeKeyMap.byPair.map!"a.value"));
+    unsafeKeyMap.clear;
+
+    HashMap!(int, UnsafeType) unsafeValueMap;
+    auto uv1 = UnsafeType("one");
+    auto uv2 = UnsafeType(2);
+    auto uv3 = UnsafeType("three");
+    unsafeValueMap[1] = uv1;
+    unsafeValueMap[2] = uv2;
+    assert(1 in unsafeValueMap && unsafeValueMap[1] == "one");
+    assert(2 in unsafeValueMap && unsafeValueMap[2] == 2);
+    assert(unsafeValueMap.getOrAdd(3, uv3) == "three");
+    assert(unsafeValueMap.get(3, UnsafeType("3")) == "three");
+    assert(equal(unsafeValueMap.byKey, unsafeValueMap.byPair.map!"a.key"));
+    assert(equal(unsafeValueMap.byValue, unsafeValueMap.byPair.map!"a.value"));
+    unsafeValueMap.clear;
+    
 }

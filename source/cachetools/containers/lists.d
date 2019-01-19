@@ -51,7 +51,7 @@ struct MultiDList(T, int N, Allocator = Mallocator, bool GCRangesAllowed = true)
         return _length;
     }
 
-    Node* insert_last(T v) @safe nothrow
+    Node* insert_last(T v)
     out
     {
         assert(_length>0);
@@ -297,7 +297,8 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
     }
 
-    private Node!T* peek_from_freelist(ref T v) @safe {
+    private Node!T* peek_from_freelist(ref T v) 
+    {
         if ( _freelist_len )
         {
             _freelist_len--;
@@ -322,7 +323,7 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
     /// insert item at list back.
     alias insertBack = insert_last;
     /// ditto
-    Node!T* insert_last(T v) @safe nothrow
+    Node!T* insert_last(T v)
     out {
         assert(_length>0);
         assert(_head !is null && _tail !is null);
@@ -345,7 +346,7 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
     /// insert item at list front
     alias insertFront = insert_first;
     /// ditto
-    Node!T* insert_first(T v) @safe nothrow
+    Node!T* insert_first(T v)
     out {
         assert(_length>0);
         assert(_head !is null && _tail !is null);
@@ -530,7 +531,7 @@ struct DList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
 
 ///
 struct SList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
-    this(this) @safe
+    this(this)
     {
         // copy items
         _Node!T* __newFirst, __newLast;
@@ -559,7 +560,7 @@ struct SList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         _freelist_len = 0;
     }
 
-    void opAssign(typeof(this) other) @safe
+    void opAssign(typeof(this) other)
     {
         // copy items
         debug(cachetools) safe_tracef("opAssign SList");
@@ -746,7 +747,7 @@ struct SList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         return Range!T(_first);
     }
     /// insert item at front
-    void insertFront(T v) @safe nothrow
+    void insertFront(T v)
     out{ assert(_first !is null && _last !is null);}
     do {
         _Node!T* n = peek_from_freelist();
@@ -761,7 +762,7 @@ struct SList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
         _length++;
     }
     /// insert item at back
-    void insertBack(T v) @safe nothrow
+    void insertBack(T v)
     out{ assert(_first !is null && _last !is null);}
     do {
         _Node!T* n = peek_from_freelist();
@@ -957,7 +958,7 @@ struct SList(T, Allocator = Mallocator, bool GCRangesAllowed = true) {
     assert(dlist_c.length() == 0);
 }
 
-private byte useFreePosition(ubyte[] m) @safe @nogc
+private byte useFreePosition(ubyte[] m) @safe @nogc nothrow
 {
     import core.bitop: bsf;
     //
@@ -978,20 +979,20 @@ private byte useFreePosition(ubyte[] m) @safe @nogc
     }
     assert(0);
 }
-private void markFreePosition(ubyte[] m, size_t position) @safe @nogc
+private void markFreePosition(ubyte[] m, size_t position) @safe @nogc nothrow
 {
     auto p = position >> 3;
     auto b = position & 0x7;
     m[p] &= (1<<b)^0xff;
 }
 
-private bool isFreePosition(ubyte[] m, size_t position) @safe @nogc
+private bool isFreePosition(ubyte[] m, size_t position) @safe @nogc nothrow
 {
     auto p = position >> 3;
     auto b = position & 0x7;
     return (m[p] & (1<<b)) == 0;
 }
-private ubyte countBusy(ubyte[] m) @safe @nogc
+private ubyte countBusy(ubyte[] m) @safe @nogc nothrow
 {
     import core.bitop;
     ubyte s = 0;
@@ -1354,7 +1355,7 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
     }
 
     /// Insert item at front.
-    NodePointer insertFront(T v) @safe {
+    NodePointer insertFront(T v) {
         _length++;
         Page* page = _pages_first;
         if ( page is null )
@@ -1450,7 +1451,7 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
     }
 
     /// Insert item back.
-    NodePointer insertBack(T v) @safe {
+    NodePointer insertBack(T v) {
         _length++;
         Page* page = _pages_last;
         if ( page is null )
@@ -1598,4 +1599,32 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
     }
     assert(clist.length == 500);
     clist.clear();
+}
+
+// unittest for unsafe types
+unittest {
+    import std.variant;
+    alias T = Algebraic!(int, string);
+    auto v = T(1);
+    CompressedList!T cl;
+    DList!T dl;
+    SList!T sl;
+    cl.insertFront(v);
+    dl.insertFront(v);
+    sl.insertFront(v);
+    assert(cl.front == v);
+    assert(dl.front.payload == v);
+    assert(sl.front == v);
+    cl.insertBack(v);
+    dl.insertBack(v);
+    sl.insertBack(v);
+    cl.popFront;
+    cl.popBack;
+    dl.popFront;
+    dl.popBack;
+    sl.popFront;
+    auto a = cl.insertFront(v);
+    cl.remove(a);
+    auto b = dl.insertFront(v);
+    dl.remove(b);
 }

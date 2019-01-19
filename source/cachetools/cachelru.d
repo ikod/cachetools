@@ -69,7 +69,7 @@ class CacheLRU(K, V, Allocator = Mallocator)
         Duration    __ttl;                  // use TTL if __ttl > 0
         bool        __reportCacheEvents;    // will user read cache events?
     }
-    final this() @safe {
+    final this() {
         __map.grow_factor(4);
     }
     struct CacheEventRange(K, V)
@@ -77,13 +77,13 @@ class CacheLRU(K, V, Allocator = Mallocator)
 
         private SList!(CacheEvent!(K, V), Allocator) __events;
 
-        void opAssign(CacheEventRange!(K, V) other) @safe
+        void opAssign(CacheEventRange!(K, V) other)
         {
             __events.clear();
             __events = other.__events;
         }
 
-        this(ref SList!(CacheEvent!(K, V), Allocator) events) @safe
+        this(ref SList!(CacheEvent!(K, V), Allocator) events)
         {
             __events = events;
         }
@@ -108,13 +108,13 @@ class CacheLRU(K, V, Allocator = Mallocator)
             return __events.length;
         }
 
-        auto save() @safe
+        auto save()
         {
             return CacheEventRange!(K, V)(__events);
         }
     }
     ///
-    final Nullable!V get(K k) @safe
+    final Nullable!V get(K k)
     {
         debug(cachetools) safe_tracef("get %s", k);
         auto store_ptr = k in __map;
@@ -143,7 +143,7 @@ class CacheLRU(K, V, Allocator = Mallocator)
         return Nullable!V(store_ptr.value);
     }
     ///
-    final PutResult put(K k, V v, TTL ttl = TTL()) @safe
+    final PutResult put(K k, V v, TTL ttl = TTL())
     out
     {
         assert(__result != PutResult(PutResultFlag.None));
@@ -218,7 +218,7 @@ class CacheLRU(K, V, Allocator = Mallocator)
     }
 
     ///
-    final bool remove(K k) @safe
+    final bool remove(K k)
     {
         debug(cachetools) safe_tracef("remove from cache %s", k);
         auto map_ptr = k in __map;
@@ -239,7 +239,7 @@ class CacheLRU(K, V, Allocator = Mallocator)
     }
 
     ///
-    final void clear() @safe
+    final void clear()
     {
         if ( __reportCacheEvents )
         {
@@ -295,7 +295,7 @@ class CacheLRU(K, V, Allocator = Mallocator)
         return this;
     }
     ///
-    final auto cacheEvents() @safe nothrow
+    final auto cacheEvents()
     {
         auto r = CacheEventRange!(K, V)(__events);
         __events.clear;
@@ -491,4 +491,32 @@ unittest
         events = lru.cacheEvents();
         assert(events.length == 2); // removed keys 1 and 2 during clear()
     }();
+}
+
+// test unsafe types
+unittest
+{
+    import std.variant;
+    import std.stdio;
+    import std.experimental.logger;
+
+    alias UnsafeType = Algebraic!(int, string);
+
+    auto c = new CacheLRU!(UnsafeType, int);
+    c.enableCacheEvents;
+
+    UnsafeType abc = "abc";
+    UnsafeType def = "abc";
+    UnsafeType one = 1;
+    c.put(abc, 1);
+    c.put(one, 2);
+    assert(abc == def);
+    assert(c.get(def) == 1);
+    assert(c.get(one) == 2);
+    c.remove(abc);
+    auto r = c.cacheEvents;
+
+    import std.json;
+    auto csj = new CacheLRU!(string, JSONValue);
+    auto cjs = new CacheLRU!(JSONValue, string);
 }
