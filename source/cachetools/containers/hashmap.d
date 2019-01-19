@@ -1045,6 +1045,9 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
             doResize(_buckets_num);
         }
 
+        if ( _buckets_num == 0 ){
+            return false;
+        }
 
         debug(cachetools) safe_tracef("remove k: %s", k);
 
@@ -1311,12 +1314,6 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
                 hashMap.remove(i);
             }
             assert(hashMap.length == 0);
-            //foreach (b; hashMap._buckets)
-            //{
-            //    assert(b.length == 0);
-            //    assert(b.node.hash == 0);
-            //    assert(b.node.next_node is null);
-            //}
         }();
     }
     //auto v = hashMap.getOrAdd(-1, -1);
@@ -1998,4 +1995,10 @@ unittest {
     assert(equal(unsafeValueMap.byValue, unsafeValueMap.byPair.map!"a.value"));
     unsafeValueMap.clear;
     
+}
+
+// issue #4
+unittest {
+    HashMap!(string, string) foo;
+    foo.remove("a");
 }
