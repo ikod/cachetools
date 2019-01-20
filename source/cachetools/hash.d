@@ -17,7 +17,7 @@ bool UseToHashMethod(T)() {
     })));
 }
 
-hash_t hash_function(T)(in T v) @safe /* @nogc inherited from toHash method */
+hash_t hash_function(T)(T v) /* @safe @nogc inherited from toHash method */
 if ( UseToHashMethod!T )
 {
     return v.toHash();

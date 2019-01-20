@@ -69,7 +69,7 @@ package bool SmallValueFootprint(V)() {
         return false;
 }
 
-private bool keyEquals(K)(const K a, const K b)
+private bool keyEquals(K)(K a, K b)
 {
     static if ( is(K==class) )
     {
@@ -687,7 +687,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     //
     // Inherits @nogc from K opEquals()
     //
-    private hash_t findEntryIndex(const hash_t start_index, const hash_t hash, in K key) const
+    private hash_t findEntryIndex(const hash_t start_index, const hash_t hash, K key)
     in
     {
         assert(hash < DELETED_HASH);        // we look for real hash
@@ -721,7 +721,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     //
     // Inherits @nogc from K opEquals()
     //
-    private hash_t findUpdateIndex(const hash_t start_index, const hash_t computed_hash, in K key) const
+    private hash_t findUpdateIndex(const hash_t start_index, const hash_t computed_hash, K key)
     in 
     {
         assert(computed_hash < DELETED_HASH);
@@ -848,7 +848,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     /// key in table
     /// Returns: pointer to stored value (if key in table) or null 
     ///
-    V* opBinaryRight(string op)(in K k) if (op == "in")
+    V* opBinaryRight(string op)(K k) if (op == "in")
     {
 
         if ( _buckets_num == 0 ) return null;
@@ -881,7 +881,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         {
             return *v;
         }
-        static if (isAssignable!(V, T))
+        static if ( is(T == V) || isAssignable!(V, T))
         {
             return *put(k, defaultValue);
         }
@@ -935,7 +935,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         {
             return *v;
         }
-        static if (isAssignable!(V, T))
+        static if (is(V == T) || isAssignable!(V, T))
         {
             return defaultValue;
         }
@@ -956,7 +956,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     /// Throws exception if key not found
     /// Returns: value for given key
     ///
-    ref V opIndex(in K k)
+    ref V opIndex(K k)
     {
         V* v = k in this;
         if ( v !is null )
@@ -1838,8 +1838,17 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         {
             return hash_function(s.handle);
         }
+        this() {
+            s = new Socket(AddressFamily.INET, SocketType.STREAM);
+        }
     }
     HashMap!(Connection, string) socketPool;
+    auto c1 = new Connection();
+    auto c2 = new Connection();
+    socketPool[c1] = "conn1";
+    socketPool[c2] = "conn2";
+    assert(socketPool[c1] == "conn1");
+    assert(socketPool[c2] == "conn2");
 }
 
 @safe unittest
@@ -2001,4 +2010,198 @@ unittest {
 unittest {
     HashMap!(string, string) foo;
     foo.remove("a");
+}
+
+//
+// to use HashMap in @safe @nogc code using class as key, class has to implement
+// @safe @nogc opEquals, hoHash, this()
+//
+@safe @nogc unittest
+{
+    import std.experimental.allocator.mallocator;
+
+    class C
+    {
+        int s;
+        bool opEquals(const C other) @safe @nogc
+        {
+            return s == other.s;
+        }
+
+        override hash_t toHash() @safe @nogc
+        {
+            return hash_function(s);
+        }
+
+        this(int i) @safe @nogc
+        {
+            s = i;
+        }
+    }
+
+    int i;
+    HashMap!(C, string) map;
+    auto allocator = Mallocator.instance;
+
+    auto c0 = () @trusted {return make!C(allocator, ++i);}();
+    auto c1 = () @trusted {return make!C(allocator, ++i);}();
+    auto c2 = () @trusted {return make!C(allocator, ++i);}();
+    map[c0] = "c0";
+    map[c1] = "c1";
+    assert(c0 in map && c1 in map);
+    assert(map.get(c0, "") == "c0");
+    assert(map.get(c1, "") == "c1");
+    assert(map.getOrAdd(c2, "c2 added") == "c2 added");
+    assert(map.length == 3);
+}
+//
+// You can use immutable class instances as key when opEquals and toHash are const.
+//
+@safe @nogc unittest
+{
+    import std.experimental.allocator.mallocator;
+
+    class C
+    {
+        int s;
+        bool opEquals(const C other) const @safe @nogc
+        {
+            return s == other.s;
+        }
+
+        override hash_t toHash() const @safe @nogc
+        {
+            return hash_function(s);
+        }
+
+        this(int i) @safe @nogc
+        {
+            s = i;
+        }
+    }
+
+    int i;
+    alias T = immutable C;
+    HashMap!(T, string) map;
+    auto allocator = Mallocator.instance;
+
+    auto c0 = () @trusted { return make!T(allocator, ++i); }();
+    auto c1 = () @trusted { return make!T(allocator, ++i); }();
+    auto c2 = () @trusted { return make!T(allocator, ++i); }();
+    map[c0] = "c0";
+    map[c1] = "c1";
+    assert(c0 in map && c1 in map);
+    assert(map.get(c0, "") == "c0");
+    assert(map.get(c1, "") == "c1");
+    assert(map.getOrAdd(c2, "c2 added") == "c2 added");
+    assert(map.length == 3);
+}
+//
+// Nothing special required when using class as value
+//
+@safe @nogc unittest
+{
+    import std.experimental.allocator.mallocator;
+
+    class C
+    {
+        int s;
+        this(int i) @safe @nogc
+        {
+            s = i;
+        }
+    }
+
+    int i;
+    alias T = immutable C;
+    HashMap!(string, T) map;
+    auto allocator = Mallocator.instance;
+
+    T c0 = () @trusted { return make!T(allocator, ++i); }();
+    T c1 = () @trusted { return make!T(allocator, ++i); }();
+    T c2 = () @trusted { return make!T(allocator, ++i); }();
+    map["c0"] = c0;
+    map["c1"] = c1;
+    assert("c0" in map && "c1" in map);
+    assert(map.get("c0", c2) is c0);
+    assert(map.get("c1", c2) is c1);
+    assert(map.getOrAdd("c2", c2) is c2);
+    map["c2"] = c2;
+    assert(map.length == 3);
+}
+// ditto, with @nogc only
+@nogc unittest
+{
+    import std.experimental.allocator.mallocator;
+
+    static int i;
+    class C
+    {
+        int s;
+        bool opEquals(const C other) @nogc
+        {
+            return s == other.s;
+        }
+
+        override hash_t toHash() @nogc
+        {
+            return hash_function(s);
+        }
+
+        this() @nogc
+        {
+            s = ++i;
+        }
+    }
+
+    HashMap!(C, string) map;
+    auto allocator = Mallocator.instance;
+    auto c0 = () @trusted { return make!C(allocator); }();
+    auto c1 = () @trusted { return make!C(allocator); }();
+    auto c2 = () @trusted { return make!C(allocator); }();
+    map[c0] = "c0";
+    map[c1] = "c1";
+    assert(c0 in map && c1 in map);
+    assert(map.get(c0, "") == "c0");
+    assert(map.get(c1, "") == "c1");
+    assert(map.getOrAdd(c2, "c2 added") == "c2 added");
+    assert(map.length == 3);
+}
+// ditto, with @safe only
+@safe unittest
+{
+    import std.experimental.allocator.mallocator;
+
+    static int i;
+    class C
+    {
+        int s;
+        bool opEquals(const C other) @safe
+        {
+            return s == other.s;
+        }
+
+        override hash_t toHash() @safe
+        {
+            return hash_function(s);
+        }
+
+        this() @safe
+        {
+            s = ++i;
+        }
+    }
+
+    HashMap!(C, string) map;
+    auto allocator = Mallocator.instance;
+    auto c0 = () @trusted { return make!C(allocator); }();
+    auto c1 = () @trusted { return make!C(allocator); }();
+    auto c2 = () @trusted { return make!C(allocator); }();
+    map[c0] = "c0";
+    map[c1] = "c1";
+    assert(c0 in map && c1 in map);
+    assert(map.get(c0, "") == "c0");
+    assert(map.get(c1, "") == "c1");
+    assert(map.getOrAdd(c2, "c2 added") == "c2 added");
+    assert(map.length == 3);
 }

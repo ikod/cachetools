@@ -6,20 +6,65 @@ This is @safe and @nogc hash map and lists collection primary for usage in cache
 
 Open-addressing hash map.
 
-It allocates (using std.experimental allocator) bucket array where it store inline hashes, keys and values, only at start or during table resize, so that we avoid any allocations during inserts.
+It allocates (using std.experimental allocator) bucket array where it keep inline hashes, keys and values. This buckets allocation happens only at start or during table resize, so any allocations during inserts are avoided.
 
-All HashMap methods are @safe and inherit @nogc from your Key and Value properties. If
+HashMap methods inherit @nogc and @safe attributes from correspondent Key and Value attributes. If
 
 1. available key comparison function is `@nogc`
 1. available hash computation for key is `@nogc`
 
-then you can use HashMap methods in `@nogc` code.
+then you can use HashMap methods in `@safe` and `@nogc` code.
+Immutable key type also require const for mentioned functions.
 
+For example this code should compile and run without problems (note that opEquals compare to class instances, not Object):
 
-To operate on **classes as key** it require:
+```
+import std.experimental.allocator;
+import std.experimental.allocator.mallocator;
+import cachetools;
 
-* `@safe` (or `@trusted`) implementation for key comparison function `opEquals(const C other)`. *HashMap can't use built-in object opEquals*.
-* `@safe` (or `@trusted`) `toHash` function.
+void main() @safe @nogc {
+
+    class C
+    {
+        int s;
+        // for opEquals:
+        //   const enable immutable instances of C as key type for HashMap
+        //   @safe enable HashMap methods in @safe code 
+        //   @nogc enable HashMap methods in @nogc code 
+        bool opEquals(const C other) const @safe @nogc
+        { 
+            return s == other.s; 
+        } 
+        // see above 
+        override hash_t toHash() const @safe @nogc 
+        { 
+            return cast(hash_t)s;
+        }
+        this(int i) @safe @nogc
+        {
+            s = i;
+        }
+    }
+
+    alias T = immutable C;
+    alias allocator = Mallocator.instance;
+
+    HashMap!(T, string) map;
+    int i;
+ 
+    auto c0 = () @trusted { return make!T(allocator, ++i); }();
+    auto c1 = () @trusted { return make!T(allocator, ++i); }();
+    auto c2 = () @trusted { return make!T(allocator, ++i); }();
+    map[c0] = "c0";
+    map[c1] = "c1";
+    assert(c0 in map && c1 in map);
+    assert(map.get(c0, "") == "c0");
+    assert(map.get(c1, "") == "c1");
+    assert(map.getOrAdd(c2, "c2 added") == "c2 added");
+    assert(map.length == 3);
+}
+```
 
 For anything other than classes HashTable can use your own or builtin comparison or `toHash` functions.
 

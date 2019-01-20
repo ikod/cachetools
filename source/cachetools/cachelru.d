@@ -519,4 +519,16 @@ unittest
     import std.json;
     auto csj = new CacheLRU!(string, JSONValue);
     auto cjs = new CacheLRU!(JSONValue, string);
+
+    class C
+    {
+    }
+
+    auto c1 = new CacheLRU!(C, string);
+    auto cob1 = new C();
+    auto cob2 = new C();
+    c1.put(cob1, "cob1");
+    c1.put(cob2, "cob2");
+    assert(c1.get(cob1) == "cob1");
+    assert(c1.get(cob2) == "cob2");
 }
