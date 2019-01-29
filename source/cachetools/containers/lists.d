@@ -1242,7 +1242,6 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
         Page *page = p._page;
         byte index = p._index;
         assert(!isFreePosition(page._freeMap, index), "you tried to remove already free list element");
-        debug(cachetools) safe_tracef("remove: page before: %s", *page);
         with (page)
         {
             assert(_count>0);
@@ -1274,10 +1273,12 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
             // relase this page
             if ( _pages_first == page )
             {
+                assert(page._prevPage is null);
                 _pages_first = page._nextPage;
             }
             if ( _pages_last == page )
             {
+                assert(page._nextPage is null);
                 _pages_last = page._prevPage;
             }
             if ( page._nextPage !is null )
@@ -1289,13 +1290,8 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
                 page._prevPage._nextPage = page._nextPage;
             }
             move_to_freelist(page);
-            if ( _pages_first is null )
-            {
-                _pages_last = null;
-            }
         }
-        assert(page._count == countBusy(page._freeMap));
-        debug(cachetools) safe_tracef("remove: page after: %s", *page);
+        // at this point page can be disposed
     }
 
     /// List front item
