@@ -598,9 +598,9 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     ///
     struct KeyPointer {
 
-        private _Bucket*                    _bucket;
-        private hash_t                      _hash;
-        private HashMap!(K,V,Allocator)*    _map;
+        private _Bucket*                                  _bucket;
+        private hash_t                                    _hash;
+        private HashMap!(K,V,Allocator, GCRangesAllowed)* _map;
 
         bool allocated() pure const nothrow @nogc {
             return _hash >= ALLOCATED_HASH;
@@ -1699,6 +1699,27 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     assert(m.byPair.map!"tuple(a.key, a.value)".array.sort.length() == 0);
     m.remove(2);
     assert(m.byPair.map!"tuple(a.key, a.value)".array.sort.length() == 0);
+}
+// test byKey, byValue, byPair compiles with GCRangesAllowed=false
+@nogc unittest
+{
+    import std.experimental.allocator.mallocator : Mallocator;
+
+    HashMap!(int, int, Mallocator, false) map;
+    map[1] = 2;
+
+    auto keys = map.byKey();
+    assert(keys.empty == false);
+    assert(keys.front == 1);
+
+    auto values = map.byValue();
+    assert(values.empty == false);
+    assert(values.front == 2);
+
+    auto pairs = map.byPair();
+    assert(pairs.empty == false);
+    assert(pairs.front.key == 1);
+    assert(pairs.front.value == 2);
 }
 // 
 // compare equivalence to AA
