@@ -687,7 +687,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     //
     // Inherits @nogc from K opEquals()
     //
-    private hash_t findEntryIndex(const hash_t start_index, const hash_t hash, K key)
+    private hash_t findEntryIndex(const hash_t start_index, const hash_t hash, ref K key)
     in
     {
         assert(hash < DELETED_HASH);        // we look for real hash
@@ -721,7 +721,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     //
     // Inherits @nogc from K opEquals()
     //
-    private hash_t findUpdateIndex(const hash_t start_index, const hash_t computed_hash, K key)
+    private hash_t findUpdateIndex(const hash_t start_index, const hash_t computed_hash, ref K key)
     in 
     {
         assert(computed_hash < DELETED_HASH);
@@ -1016,8 +1016,16 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
 
         if ( h < ALLOCATED_HASH )
         {
+            final switch(h) {
+                case EMPTY_HASH:
+                    _empty--;
+                    break;
+                case DELETED_HASH:
+                    _deleted--;
+                    break;
+            }
             _allocated++;
-            _empty--;
+            bucket.key = k;
         }
         debug(cachetools) safe_tracef("place inline buckets[%d] '%s'='%s'", placement_index, k, v);
         bucket.value = v;
@@ -1030,7 +1038,6 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
             () @trusted {r = cast(V*)&bucket.value;}();
         }
         bucket.hash = computed_hash | ALLOCATED_HASH;
-        bucket.key = k;
         return r;
     }
 
