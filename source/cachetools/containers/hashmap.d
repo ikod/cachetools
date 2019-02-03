@@ -556,7 +556,7 @@ package struct ChainedHashMap(K, V, Allocator = Mallocator)
 ///
 struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
 
-    enum initial_buckets_num = 32;
+    private enum initial_buckets_num = 32;
 
     alias StoredKeyType   = StoredType!K;
     alias StoredValueType = StoredType!V;
