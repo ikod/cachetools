@@ -26,11 +26,11 @@ import std.experimental.logger;
 
 debug(cachetools) @safe @nogc nothrow
 {
-    void safe_tracef(A...)(string f, scope A args) @safe @nogc nothrow
+    void safe_tracef(A...)(string f, scope A args, string file = __FILE__, int line = __LINE__) @safe @nogc nothrow
     {
         debug (cachetools) try
         {
-            () @trusted @nogc {tracef(f, args);}();
+            () @trusted @nogc {tracef("%s:%d " ~ f, file, line, args);}();
         }
         catch(Exception e)
         {
