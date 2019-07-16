@@ -643,7 +643,7 @@ unittest
     cache.put(1, 1);            // default TTL - this must not survive 1s sleep
     cache.put(2, 2, ~TTL());    // no TTL, ignore default - this must survive any time 
     cache.put(3, 3, TTL(2.seconds));    // set TTL for this item - this must not survive 2s
-    Thread.sleep(1000.msecs);
+    Thread.sleep(1200.msecs);
     assert(cache.get(1).isNull); // expired
     assert(cache.get(2) == 2);
     assert(cache.get(3) == 3);
