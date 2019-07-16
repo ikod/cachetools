@@ -487,6 +487,28 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     ///
     alias require = getOrAdd;
 
+    ///
+    /// Add key/value to hash if key is not in table. value can be lazy/callable.
+    /// Returns: true if key were added.
+    ///
+    bool addIfMissed(T)(K k, T value) {
+        V* v = k in this;
+        if (v) {
+            return false;
+        }
+        static if (is(T == V) || isAssignable!(V, T)) {
+            put(k, value);
+            return true;
+        }
+        else static if (isCallable!T && isAssignable!(V, ReturnType!T)) {
+            put(k, value());
+            return true;
+        }
+        else {
+            static assert(0, "what?");
+        }
+    }
+
     /// get current grow factor.
     auto grow_factor() const @safe {
         return _grow_factor;
@@ -1843,4 +1865,16 @@ unittest {
     foreach (i; 0 .. 100) {
         assert(i in hashMap1);
     }
+}
+//
+// test addIfMissed
+//
+@safe unittest {
+    HashMap!(int, int) map;
+
+    foreach (i; 0 .. 100) {
+        map[i] = i;
+    }
+    assert(map.addIfMissed(101,101));
+    assert(!map.addIfMissed(101, 102));
 }

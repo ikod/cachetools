@@ -63,19 +63,22 @@ $('#symbolSearchPane').show();</script>
 			<h1>Module cachetools.cachelru</h1><p></p>
 			<section></section>
 			<section>
-				<h2>Classes</h2>
+				<h2>Aliases</h2>
 				<table>
 					<col class="caption"/>
 					<tr>
-						<th>Name</th><th>Description</th>
+						<th>Name</th><th>Type</th><th>Description</th>
 					</tr>
 					<tr>
 						<td>
-							<code>
-								<a id="CacheLRU" class="public" href="../cachetools/cachelru/CacheLRU.html">CacheLRU</a>
-							</code>
+							<a id="TimeType" class="public" href="../cachetools/cachelru/TimeType.html">
+								<code>TimeType</code>
+							</a>
 						</td>
-						<td>CacheLRU contains maximum <code class="lang-d"><a href="../cachetools/cachelru/CacheLRU.size.html"><span class="pln">size</span></a></code> items
+						<td>
+							<code class="prettyprint lang-d"><span class="pln">core<wbr/></span><span class="pun">.</span><span class="pln">time<wbr/></span><span class="pun">.</span><span class="typ">MonoTimeImpl</span>!(2)</code>
+						</td>
+						<td>CacheLRU contains maximum <code class="lang-d"><span class="pln">size</span></code> items
 Eviction policy:
 1. evict TTL-ed entry (if TTL enabled), otherwise
 2. if oldest entry not expired - evict oldest accessed (LRU)
