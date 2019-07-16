@@ -725,7 +725,7 @@ unittest
     assert(e.length == 1);
     assert(e.front.key == 2);
     assert(e.front.event == EventType.Updated);
-    Thread.sleep(1.seconds);
+    Thread.sleep(1500.msecs);
     // In: 4, 5
     // Out: 3
     // Main: 2
