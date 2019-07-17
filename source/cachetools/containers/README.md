@@ -92,6 +92,10 @@ Iterators:
 * `byValue()` - returns range of all values in table without any order. Unstable - become invalid if you add/remove keys while use byValue range.
 * `byPair()` - returns range of all key-value pairs in table without any order. Unstable - invalid if you add/remove keys while use byPair range. Range elements are named tuples with `.key` and `.value` items.
 
+## OrderedHashMap ##
+
+HashMap that keeps order of item insertion. Can me slower, as it uses list and hash map to provide ordering property
+
 ## CompressedList ##
 
 `CompressedList` is safe and nogc `unrolled` list. Instead of allocating for each item, unrolled lists allocate chunks for some number of items. Within each chunk items behave like array - insertion and deletion shift items within the chunk (overflowing to neghbor chunks if required).
