@@ -762,23 +762,25 @@ unittest
 ///
 ///
 ///
-@safe @nogc nothrow unittest
+unittest
 {
 
     // create cache with total size 1024
+    auto allocator = Mallocator.instance;
     auto cache = () @trusted {
-        auto allocator = Mallocator.instance;
         return allocator.make!(Cache2Q!(int, string))(1024);
     }();
-
-    cache.sizeIn = 10;              // if you need, later you can set any size for In queue
-    cache.sizeOut = 55;             // and for out quque
-    cache.sizeMain = 600;           // and for main cache
-    cache.put(1, "one");
-    assert(cache.get(1) == "one");  // key 1 is in cache
-    assert(cache.get(2).isNull);    // key 2 not in cache
-    assert(cache.length == 1);      // # of elements in cache
-    cache.clear;                    // clear cache
+    () @safe @nogc nothrow {
+        cache.sizeIn = 10; // if you need, later you can set any size for In queue
+        cache.sizeOut = 55; // and for out quque
+        cache.sizeMain = 600; // and for main cache
+        cache.put(1, "one");
+        assert(cache.get(1) == "one"); // key 1 is in cache
+        assert(cache.get(2).isNull); // key 2 not in cache
+        assert(cache.length == 1); // # of elements in cache
+        cache.clear; // clear cache
+    }();
+    dispose(allocator, cache);
 }
 
 // test unsafe types

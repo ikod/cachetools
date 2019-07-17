@@ -1147,6 +1147,15 @@ struct CompressedList(T, Allocator = Mallocator, bool GCRangesAllowed = true)
         int     _freelist_len;
         enum    _freelist_len_max = 100;
     }
+    this(this) {
+        auto r = range();
+        _pages_first = _pages_last = _freelist = null;
+        _length = 0;
+        _freelist_len = 0;
+        foreach(e; r) {
+            insertBack(e);
+        }
+    }
     private void move_to_freelist(Page* page) @safe @nogc {
         if ( _freelist_len >= _freelist_len_max )
         {
@@ -1623,4 +1632,13 @@ unittest {
     cl.remove(a);
     auto b = dl.insertFront(v);
     dl.remove(b);
+}
+
+@safe @nogc unittest {
+    import std.range, std.algorithm;
+    CompressedList!int a, b;
+    iota(0,100).each!(e => a.insertBack(e));
+    a.popFront();
+    b = a;
+    assert(equal(a, b));
 }

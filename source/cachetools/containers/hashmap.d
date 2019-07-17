@@ -157,7 +157,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         // keep old _buckets_num(to avoid resizes) and _mask, but use new _buckets => all empty, no allocated;
         //
         _empty = _buckets_num;
-        _allocated = 0;
+        _allocated = _deleted = 0;
         assert(popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
         _buckets = makeArray!(_Bucket)(allocator, _buckets_num);
         () @trusted {
@@ -1655,7 +1655,7 @@ unittest {
 // to use HashMap in @safe @nogc code using class as key, class has to implement
 // @safe @nogc opEquals, hoHash, this()
 //
-@safe @nogc unittest
+unittest
 {
     import std.experimental.allocator.mallocator;
 
@@ -1678,25 +1678,33 @@ unittest {
         }
     }
 
-    int i;
-    HashMap!(C, string) map;
     auto allocator = Mallocator.instance;
 
-    auto c0 = () @trusted {return make!C(allocator, ++i);}();
-    auto c1 = () @trusted {return make!C(allocator, ++i);}();
-    auto c2 = () @trusted {return make!C(allocator, ++i);}();
-    map[c0] = "c0";
-    map[c1] = "c1";
-    assert(c0 in map && c1 in map);
-    assert(map.get(c0, "") == "c0");
-    assert(map.get(c1, "") == "c1");
-    assert(map.getOrAdd(c2, "c2 added") == "c2 added");
-    assert(map.length == 3);
+    int i;
+    auto c0 = make!C(allocator, ++i);
+    auto c1 = make!C(allocator, ++i);
+    auto c2 = make!C(allocator, ++i);
+
+    () @safe @nogc {
+        HashMap!(C, string) map;
+        map[c0] = "c0";
+        map[c1] = "c1";
+        assert(c0 in map && c1 in map);
+        assert(map.get(c0, "") == "c0");
+        assert(map.get(c1, "") == "c1");
+        assert(map.getOrAdd(c2, "c2 added") == "c2 added");
+        assert(map.length == 3);
+        map.clear;
+    }();
+
+    dispose(allocator, c0);
+    dispose(allocator, c1);
+    dispose(allocator, c2);
 }
 //
 // You can use immutable class instances as key when opEquals and toHash are const.
 //
-@safe @nogc unittest
+@safe unittest
 {
     import std.experimental.allocator.mallocator;
 
@@ -1721,24 +1729,31 @@ unittest {
 
     int i;
     alias T = immutable C;
-    HashMap!(T, string) map;
     auto allocator = Mallocator.instance;
 
     auto c0 = () @trusted { return make!T(allocator, ++i); }();
     auto c1 = () @trusted { return make!T(allocator, ++i); }();
     auto c2 = () @trusted { return make!T(allocator, ++i); }();
-    map[c0] = "c0";
-    map[c1] = "c1";
-    assert(c0 in map && c1 in map);
-    assert(map.get(c0, "") == "c0");
-    assert(map.get(c1, "") == "c1");
-    assert(map.getOrAdd(c2, "c2 added") == "c2 added");
-    assert(map.length == 3);
+    () @nogc {
+        HashMap!(T, string) map;
+        map[c0] = "c0";
+        map[c1] = "c1";
+        assert(c0 in map && c1 in map);
+        assert(map.get(c0, "") == "c0");
+        assert(map.get(c1, "") == "c1");
+        assert(map.getOrAdd(c2, "c2 added") == "c2 added");
+        assert(map.length == 3);
+    }();
+    () @trusted {
+        dispose(allocator, cast(C)c0);
+        dispose(allocator, cast(C) c1);
+        dispose(allocator, cast(C) c2);
+    }();
 }
 //
 // Nothing special required when using class as value
 //
-@safe @nogc unittest
+@safe unittest
 {
     import std.experimental.allocator.mallocator;
 
@@ -1753,23 +1768,30 @@ unittest {
 
     int i;
     alias T = immutable C;
-    HashMap!(string, T) map;
     auto allocator = Mallocator.instance;
 
     T c0 = () @trusted { return make!T(allocator, ++i); }();
     T c1 = () @trusted { return make!T(allocator, ++i); }();
     T c2 = () @trusted { return make!T(allocator, ++i); }();
-    map["c0"] = c0;
-    map["c1"] = c1;
-    assert("c0" in map && "c1" in map);
-    assert(map.get("c0", c2) is c0);
-    assert(map.get("c1", c2) is c1);
-    assert(map.getOrAdd("c2", c2) is c2);
-    map["c2"] = c2;
-    assert(map.length == 3);
+    () @nogc {
+        HashMap!(string, T) map;
+        map["c0"] = c0;
+        map["c1"] = c1;
+        assert("c0" in map && "c1" in map);
+        assert(map.get("c0", c2) is c0);
+        assert(map.get("c1", c2) is c1);
+        assert(map.getOrAdd("c2", c2) is c2);
+        map["c2"] = c2;
+        assert(map.length == 3);
+    }();
+    () @trusted {
+        dispose(allocator, cast(C) c0);
+        dispose(allocator, cast(C) c1);
+        dispose(allocator, cast(C) c2);
+    }();
 }
 // ditto, with @nogc only
-@nogc unittest
+unittest
 {
     import std.experimental.allocator.mallocator;
 
@@ -1793,18 +1815,25 @@ unittest {
         }
     }
 
-    HashMap!(C, string) map;
     auto allocator = Mallocator.instance;
     auto c0 = () @trusted { return make!C(allocator); }();
     auto c1 = () @trusted { return make!C(allocator); }();
     auto c2 = () @trusted { return make!C(allocator); }();
-    map[c0] = "c0";
-    map[c1] = "c1";
-    assert(c0 in map && c1 in map);
-    assert(map.get(c0, "") == "c0");
-    assert(map.get(c1, "") == "c1");
-    assert(map.getOrAdd(c2, "c2 added") == "c2 added");
-    assert(map.length == 3);
+    () @nogc {
+        HashMap!(C, string) map;
+        map[c0] = "c0";
+        map[c1] = "c1";
+        assert(c0 in map && c1 in map);
+        assert(map.get(c0, "") == "c0");
+        assert(map.get(c1, "") == "c1");
+        assert(map.getOrAdd(c2, "c2 added") == "c2 added");
+        assert(map.length == 3);
+    }();
+    () @trusted {
+        dispose(allocator, cast(C) c0);
+        dispose(allocator, cast(C) c1);
+        dispose(allocator, cast(C) c2);
+    }();
 }
 // ditto, with @safe only
 @safe unittest
@@ -1843,20 +1872,26 @@ unittest {
     assert(map.get(c1, "") == "c1");
     assert(map.getOrAdd(c2, "c2 added") == "c2 added");
     assert(map.length == 3);
+    () @trusted {
+        dispose(allocator, cast(C) c0);
+        dispose(allocator, cast(C) c1);
+        dispose(allocator, cast(C) c2);
+    }();
 }
 
 //
 // test copy constructor
 //
-@safe  unittest {
+@safe @nogc unittest {
     import std.experimental.logger;
     import std.stdio;
-    globalLogLevel = LogLevel.info;
+
     HashMap!(int, int) hashMap0, hashMap1;
 
     foreach (i; 0 .. 100) {
         hashMap0[i] = i;
     }
+
     hashMap1 = hashMap0;
     hashMap0.clear();
     assert(hashMap0.length == 0);
