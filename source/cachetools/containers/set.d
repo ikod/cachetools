@@ -1,4 +1,20 @@
-///
+/**
+
+ Set implemented as hash table
+
+ Inherits @nogc and @safe properties from key properties.
+
+ Implements next set ops
+  $(UL create - fill set from range)
+  $(UL add - add item to set; O(1))
+  $(UL remove - remove item from set if present; O(1))
+  $(UL length - number of items in set; O(1))
+  $(UL join - join sets; O(N))
+  $(UL intersection - create intersection of two sets; O(N))
+  $(UL difference - create difference of two sets; O(N))
+  $(UL iterate - create iterator over set items;)
+  $(UL in - if element presented in set; O(1))
+*/
 module cachetools.containers.set;
 
 import std.algorithm;
@@ -7,7 +23,7 @@ import std.range;
 import cachetools.containers.hashmap;
 
 ///
-/// create set from inoput range
+/// create set from input range
 ///
 auto set(R)(R r) if (isInputRange!R) {
     alias K = ElementType!R;
@@ -16,45 +32,31 @@ auto set(R)(R r) if (isInputRange!R) {
     return result;
 }
 
-///
-/// Set implemented as hash table
-///
-/// Inherits nogc and safety properties from key properties.
-///
-/// Implements next set ops
-/// create - fill set from range
-/// add - add item to set; O(1)
-/// remove - remove item from set if present; O(1)
-/// length - number of items in set; O(1)
-/// join - join sets; O(N)
-/// intersection - create intersection of two sets; O(N)
-/// difference - create difference of two sets; O(N)
-/// iterate - create iterator over set items;
-/// in - if element presented in set; O(1)
+/// Set structure
 struct Set(K) {
 private:
         HashMap!(K, bool) _map;
 
 public:
 
-    ///
+    /// Fill set from range
     void create(R)(R range) {
         _map.clear;
         range.each!(k => _map.put(k, true));
     }
-    ///
+    /// add element to set
     void add(K)(K k) {
         _map.put(k, true);
     }
-    ///
+    /// remove element from set
     void remove(K)(K k) {
         _map.remove(k);
     }
-    ///
+    /// number of items in set
     auto length() const {
         return _map.length;
     }
-    ///
+    /// join other set to this set
     void join(K)(Set!K other) {
         if ( other.length == 0 ) return;
 
@@ -63,7 +65,7 @@ public:
                 _map.put(b.key, true);
         }
     }
-    ///
+    /// create intersection of two sets
     auto intersection(K)(Set!K other) {
         Set!K result;
 
@@ -82,7 +84,7 @@ public:
         }
         return result;
     }
-    ///
+    /// create difference of two sets
     auto difference(K)(Set!K other) {
         Set!K result;
         if ( other.length == 0 ) return this;
@@ -92,17 +94,17 @@ public:
         }
         return result;
     }
-    ///
+    /// iterate over items
     auto iterate() {
         return _map.byKey;
     }
-    ///
+    /// if element present in set
     bool opBinaryRight(string op)(K k) inout if (op=="in") {
         return  k in _map?true:false;
     }
 }
 
-
+///
 @safe @nogc unittest {
     import std.stdio;
 

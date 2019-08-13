@@ -2,7 +2,7 @@
 <html>
 	<head>
 		<meta charset="UTF-8"/>
-		<title>Function HashMap.byPair</title>
+		<title>Function Set.opBinaryRight</title>
 		<link rel="stylesheet" type="text/css" href="../../../styles/ddox.css"/>
 		<link rel="stylesheet" href="../../../prettify/prettify.css" type="text/css"/>
 		<script type="text/javascript" src="../../../scripts/jquery.js">/**/</script><script type="text/javascript" src="../../../scripts/ddox.js">/**/</script>
@@ -29,7 +29,7 @@ $('#symbolSearchPane').show();</script>
 					</div>
 			<ul class="tree-view">
 				<li>
-					<div class="module selected">
+					<div class="module ">
 						<a href="../../../cachetools/containers/hashmap.html">hashmap</a>
 					</div>
 				</li>
@@ -44,7 +44,7 @@ $('#symbolSearchPane').show();</script>
 					</div>
 				</li>
 				<li>
-					<div class="module ">
+					<div class="module selected">
 						<a href="../../../cachetools/containers/set.html">set</a>
 					</div>
 				</li>
@@ -70,12 +70,19 @@ $('#symbolSearchPane').show();</script>
 			</ul>
 		</nav>
 		<div id="main-contents">
-			<h1>Function HashMap.byPair</h1><p>iterator by key/value pairs
+			<h1>Function Set.opBinaryRight</h1><p>if element present in set
 </p>
 			<div class="prototype">
 				<code class="lang-d">
 					<div class="single-prototype">
-			<span class="kwd">auto </span><span class="kwd">auto</span> <span class="pln">byPair</span><span class="pun">(</span><span class="pun">)</span><span class="pln"> </span><span class="kwd">pure @safe</span><span class="pun">;</span>
+			<span class="kwd">inout </span><span class="typ">bool</span> <span class="pln">opBinaryRight</span>(<span class="typ">string</span> op)
+			<span class="pun">(</span>
+			<br/>
+			&nbsp;&nbsp;<span class="pln">K</span> <span class="pln">k</span>
+			<br/>
+			<span class="pun">)</span>
+			<br/>
+			<span class="kwd">if</span> <span class="pun">(</span><span class="pln">op </span><span class="pun">== </span><span class="str">"in"</span><span class="pun">);</span>
 					</div>
 				</code>
 			</div>

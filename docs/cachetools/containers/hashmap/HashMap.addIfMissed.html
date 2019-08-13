@@ -2,7 +2,7 @@
 <html>
 	<head>
 		<meta charset="UTF-8"/>
-		<title>Function HashMap.byPair</title>
+		<title>Function HashMap.addIfMissed</title>
 		<link rel="stylesheet" type="text/css" href="../../../styles/ddox.css"/>
 		<link rel="stylesheet" href="../../../prettify/prettify.css" type="text/css"/>
 		<script type="text/javascript" src="../../../scripts/jquery.js">/**/</script><script type="text/javascript" src="../../../scripts/ddox.js">/**/</script>
@@ -70,17 +70,28 @@ $('#symbolSearchPane').show();</script>
 			</ul>
 		</nav>
 		<div id="main-contents">
-			<h1>Function HashMap.byPair</h1><p>iterator by key/value pairs
+			<h1>Function HashMap.addIfMissed</h1><p>Add key/value to hash if key is not in table. value can be lazy/callable.
 </p>
 			<div class="prototype">
 				<code class="lang-d">
 					<div class="single-prototype">
-			<span class="kwd">auto </span><span class="kwd">auto</span> <span class="pln">byPair</span><span class="pun">(</span><span class="pun">)</span><span class="pln"> </span><span class="kwd">pure @safe</span><span class="pun">;</span>
+			<span class="typ">bool</span> <span class="pln">addIfMissed</span>(T)
+			<span class="pun">(</span>
+			<br/>
+			&nbsp;&nbsp;<span class="pln">K</span> <span class="pln">k</span><span class="pun">,</span>
+			<br/>
+			&nbsp;&nbsp;<span class="pln">T</span> <span class="pln">value</span>
+			<br/>
+			<span class="pun">)</span><span class="pun">;</span>
 					</div>
 				</code>
 			</div>
 			
-			
+			<section><h2>Returns</h2>
+<p>true if key were added.
+</p>
+</section>
+
 			<footer>
 				<table class="license-info">
 					<tr>

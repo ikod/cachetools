@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta charset="UTF-8"/>
+		<title>Struct Set</title>
+		<link rel="stylesheet" type="text/css" href="../../../styles/ddox.css"/>
+		<link rel="stylesheet" href="../../../prettify/prettify.css" type="text/css"/>
+		<script type="text/javascript" src="../../../scripts/jquery.js">/**/</script><script type="text/javascript" src="../../../scripts/ddox.js">/**/</script>
+	</head>
+	<body onload="setupDdox();">
+		<nav id="main-nav">
+			<noscript>
+				<p style="color: red">The search functionality needs JavaScript enabled</p>
+			</noscript>
+			<div id="symbolSearchPane" style="display: none">
+				<form action="#" method="GET">
+					<input id="symbolSearch" type="text" name="q" placeholder="Search for symbols" autocomplete="off" onchange="performSymbolSearch(40);" onkeypress="this.onchange();" onpaste="this.onchange();" oninput="this.onchange();"/>
+				</form>
+				<ul id="symbolSearchResults" class="symbolList" style="display: none"></ul><script type="application/javascript" src="../../../symbols.js"></script><script type="application/javascript">var symbolSearchRootDir = "../../../";
+$('#symbolSearchPane').show();</script>
+			</div>
+			<ul class="tree-view">
+				<li class="tree-view ">
+					<div class="package ">cachetools
+					</div>
+			<ul class="tree-view">
+				<li class="tree-view ">
+					<div class="package ">containers
+					</div>
+			<ul class="tree-view">
+				<li>
+					<div class="module ">
+						<a href="../../../cachetools/containers/hashmap.html">hashmap</a>
+					</div>
+				</li>
+				<li>
+					<div class="module ">
+						<a href="../../../cachetools/containers/lists.html">lists</a>
+					</div>
+				</li>
+				<li>
+					<div class="module ">
+						<a href="../../../cachetools/containers/orderedhashmap.html">orderedhashmap</a>
+					</div>
+				</li>
+				<li>
+					<div class="module selected">
+						<a href="../../../cachetools/containers/set.html">set</a>
+					</div>
+				</li>
+			</ul>
+				</li>
+				<li>
+					<div class="module ">
+						<a href="../../../cachetools/cache2q.html">cache2q</a>
+					</div>
+				</li>
+				<li>
+					<div class="module ">
+						<a href="../../../cachetools/cachelru.html">cachelru</a>
+					</div>
+				</li>
+				<li>
+					<div class="module ">
+						<a href="../../../cachetools/interfaces.html">interfaces</a>
+					</div>
+				</li>
+			</ul>
+				</li>
+			</ul>
+		</nav>
+		<div id="main-contents">
+			<h1>Struct Set</h1><p>Set structure
+</p>
+			<div class="prototype">
+				<code class="lang-d">
+					<div class="single-prototype">
+			<span class="kwd">struct</span> <span class="typ">Set</span>(K)
+			<span class="pun">;</span>
+					</div>
+				</code>
+			</div>
+			
+			<section><h2>Methods</h2>
+				<table>
+					<col class="caption"/>
+					<tr>
+						<th>Name</th><th>Description</th>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/set/Set.add.html" class="public">
+								<code>add</code>
+							</a>
+						</td>
+						<td>add element to set
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/set/Set.create.html" class="public">
+								<code>create</code>
+							</a>
+						</td>
+						<td>Fill set from range
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/set/Set.difference.html" class="public">
+								<code>difference</code>
+							</a>
+						</td>
+						<td>create difference of two sets
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/set/Set.intersection.html" class="public">
+								<code>intersection</code>
+							</a>
+						</td>
+						<td>create intersection of two sets
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/set/Set.iterate.html" class="public">
+								<code>iterate</code>
+							</a>
+						</td>
+						<td>iterate over items
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/set/Set.join.html" class="public">
+								<code>join</code>
+							</a>
+						</td>
+						<td>join other set to this set
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/set/Set.length.html" class="public">
+								<code>length</code>
+							</a>
+						</td>
+						<td>number of items in set
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/set/Set.opBinaryRight.html" class="public">
+								<code>opBinaryRight</code>
+							</a>
+						</td>
+						<td>if element present in set
+</td>
+					</tr>
+					<tr>
+						<td>
+							<a href="../../../cachetools/containers/set/Set.remove.html" class="public">
+								<code>remove</code>
+							</a>
+						</td>
+						<td>remove element from set
+</td>
+					</tr>
+				</table>
+			</section>
+			<section><h2>Example</h2>
+
+<pre class="code"><code class="lang-d"><span class="kwd">import </span><span class="pln">std<wbr/></span><span class="pun">.</span><span class="pln">stdio</span><span class="pun">;
+
+</span><span class="typ">Set</span><span class="pun">!</span><span class="typ">string </span><span class="pln">s</span><span class="pun">;
+</span><span class="pln">s<wbr/></span><span class="pun">.</span><span class="pln">add</span><span class="pun">(</span><span class="str">"hello"</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">s<wbr/></span><span class="pun">.</span><span class="pln">length </span><span class="pun">== </span><span class="lit">1</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">equal</span><span class="pun">(</span><span class="pln">s<wbr/></span><span class="pun">.</span><span class="pln">iterate</span><span class="pun">, </span><span class="pln">only</span><span class="pun">(</span><span class="str">"hello"</span><span class="pun">)));
+</span><span class="pln">s<wbr/></span><span class="pun">.</span><span class="pln">remove</span><span class="pun">(</span><span class="str">"hello"</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">s<wbr/></span><span class="pun">.</span><span class="pln">length </span><span class="pun">== </span><span class="lit">0</span><span class="pun">);
+</span><span class="pln">s<wbr/></span><span class="pun">.</span><span class="pln">remove</span><span class="pun">(</span><span class="str">"hello"</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">s<wbr/></span><span class="pun">.</span><span class="pln">length </span><span class="pun">== </span><span class="lit">0</span><span class="pun">);
+
+</span><span class="pln">s<wbr/></span><span class="pun">.</span><span class="pln">create</span><span class="pun">(</span><span class="pln">only</span><span class="pun">(</span><span class="str">"hello"</span><span class="pun">, </span><span class="str">"hello"</span><span class="pun">, </span><span class="str">"world"</span><span class="pun">));
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">s<wbr/></span><span class="pun">.</span><span class="pln">length </span><span class="pun">== </span><span class="lit">2</span><span class="pun">);
+
+</span><span class="pln">s<wbr/></span><span class="pun">.</span><span class="pln">join</span><span class="pun">(<a href="../../../cachetools/containers/set/set.html"></span><span class="pln">set</span></a><span class="pun">(</span><span class="pln">only</span><span class="pun">(</span><span class="str">"and"</span><span class="pun">, </span><span class="str">"bye"</span><span class="pun">)));
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">s<wbr/></span><span class="pun">.</span><span class="pln">length </span><span class="pun">== </span><span class="lit">4</span><span class="pun">);
+
+</span><span class="kwd">auto </span><span class="pln">other </span><span class="pun">= <a href="../../../cachetools/containers/set/set.html"></span><span class="pln">set</span></a><span class="pun">(</span><span class="pln">only</span><span class="pun">(</span><span class="str">"and"</span><span class="pun">, </span><span class="str">"bye"</span><span class="pun">, </span><span class="str">"!"</span><span class="pun">));
+</span><span class="kwd">auto </span><span class="pln">cross0 </span><span class="pun">= </span><span class="pln">s<wbr/></span><span class="pun">.</span><span class="pln">intersection</span><span class="pun">(</span><span class="pln">other</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="str">"bye" </span><span class="kwd">in </span><span class="pln">cross0</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="str">"!"  </span><span class="pun">!</span><span class="kwd">in </span><span class="pln">cross0</span><span class="pun">);
+</span><span class="kwd">auto </span><span class="pln">cross1 </span><span class="pun">= </span><span class="pln">other<wbr/></span><span class="pun">.</span><span class="pln">intersection</span><span class="pun">(</span><span class="pln">s</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="pln">cross0<wbr/></span><span class="pun">.</span><span class="pln">length </span><span class="pun">== </span><span class="pln">cross1<wbr/></span><span class="pun">.</span><span class="pln">length</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="str">"and" </span><span class="kwd">in </span><span class="pln">cross0 </span><span class="pun">&amp;&amp; </span><span class="str">"and" </span><span class="kwd">in </span><span class="pln">cross1</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="str">"bye" </span><span class="kwd">in </span><span class="pln">cross0 </span><span class="pun">&amp;&amp; </span><span class="str">"bye" </span><span class="kwd">in </span><span class="pln">cross1</span><span class="pun">);
+
+</span><span class="kwd">auto </span><span class="pln">nums </span><span class="pun">= <a href="../../../cachetools/containers/set/set.html"></span><span class="pln">set</span></a><span class="pun">(</span><span class="pln">iota</span><span class="pun">(</span><span class="lit">10</span><span class="pun">));
+</span><span class="kwd">auto </span><span class="pln">someNums </span><span class="pun">= </span><span class="pln">nums<wbr/></span><span class="pun">.</span><span class="pln">difference</span><span class="pun">(<a href="../../../cachetools/containers/set/set.html"></span><span class="pln">set</span></a><span class="pun">(</span><span class="pln">only</span><span class="pun">(</span><span class="lit">1</span><span class="pun">,</span><span class="lit">2</span><span class="pun">,</span><span class="lit">3</span><span class="pun">)));
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="lit">0 </span><span class="kwd">in </span><span class="pln">someNums</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="lit">1 </span><span class="pun">!</span><span class="kwd">in </span><span class="pln">someNums</span><span class="pun">);
+
+</span><span class="typ">bool </span><span class="pln">f</span><span class="pun">(</span><span class="kwd">const </span><span class="typ">Set</span><span class="pun">!</span><span class="typ">string </span><span class="pln">s</span><span class="pun">) {
+    </span><span class="kwd">return </span><span class="str">"yes" </span><span class="kwd">in </span><span class="pln">s</span><span class="pun">;
+}
+
+</span><span class="typ">Set</span><span class="pun">!</span><span class="typ">string </span><span class="pln">ss</span><span class="pun">;
+</span><span class="pln">ss<wbr/></span><span class="pun">.</span><span class="pln">add</span><span class="pun">(</span><span class="str">"yes"</span><span class="pun">);
+</span><span class="pln">f</span><span class="pun">(</span><span class="pln">ss</span><span class="pun">);
+</span><span class="kwd">assert</span><span class="pun">(</span><span class="str">"yes" </span><span class="kwd">in </span><span class="pln">ss</span><span class="pun">);
+</span></code></pre>
+</section>
+
+			<footer>
+				<table class="license-info">
+					<tr>
+						<th>Authors</th>
+						<td>
+							
+						</td>
+					</tr>
+					<tr>
+						<th>Copyright</th>
+						<td>
+							
+						</td>
+					</tr>
+					<tr>
+						<th>License</th>
+						<td>
+							
+						</td>
+					</tr>
+				</table>
+				<p class="faint">Generated using the DDOX documentation generator</p>
+			</footer>
+		</div>
+	</body>
+</html>
