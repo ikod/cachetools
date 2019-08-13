@@ -120,7 +120,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     alias StoredKeyType   = StoredType!K;
     alias StoredValueType = StoredType!V;
 
-    private {
+    package {
         alias   allocator = Allocator.instance;
 
         struct _Bucket {
@@ -130,7 +130,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
             string toString() const {
                 import std.format;
                 return "%s, hash: %0x,key: %s, value: %s".format(
-                    [EMPTY_HASH:"free", DELETED_HASH:"deleted", ALLOCATED_HASH:"allocated"][cast(long   )(hash & TYPE_MASK)],
+                    [EMPTY_HASH:"free", DELETED_HASH:"deleted", ALLOCATED_HASH:"allocated"][cast(long)(hash & TYPE_MASK)],
                     hash, key, value);
             }
         }
@@ -158,7 +158,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         //
         _empty = _buckets_num;
         _allocated = _deleted = 0;
-        assert(popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
+        assert(_buckets_num == 0 || popcnt(_buckets_num) == 1, "Buckets number must be power of 2");
         _buckets = makeArray!(_Bucket)(allocator, _buckets_num);
         () @trusted {
             static if (UseGCRanges!(Allocator, K, V, GCRangesAllowed)) {
@@ -276,7 +276,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     //
     // Inherits @nogc from K opEquals()
     //
-    private hash_t findEntryIndex(const hash_t start_index, const hash_t hash, ref K key)
+    private hash_t findEntryIndex(K)(const hash_t start_index, const hash_t hash, ref K key)
     in
     {
         assert(hash < DELETED_HASH);        // we look for real hash
@@ -303,6 +303,35 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         return hash_t.max;
     }
 
+    private hash_t findEntryIndex(K)(const hash_t start_index, const hash_t hash, ref K key) const
+    in {
+        assert(hash < DELETED_HASH); // we look for real hash
+        assert(start_index < _buckets_num); // start position inside array
+    }
+    do {
+        hash_t index = start_index;
+
+        do {
+            immutable h = _buckets[index].hash;
+
+            debug (cachetools)
+                safe_tracef("test entry index %d (%s) for key %s", index, _buckets[index], key);
+
+            if (h == EMPTY_HASH) {
+                break;
+            }
+
+            if (h >= ALLOCATED_HASH && (h & HASH_MASK) == hash
+                    && keyEquals(_buckets[index].key, key)) {
+                //() @nogc @trusted {debug(cachetools) tracef("test entry index %d for key %s - success", index, key);}();
+                return index;
+            }
+            index = (index + 1) & _mask;
+        }
+        while (index != start_index);
+        return hash_t.max;
+    }
+
     //
     // Find place where we can insert(DELETED or EMPTY bucket) or update existent (ALLOCATED)
     // bucket for key k and precomputed hash starting from start_index
@@ -310,7 +339,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     //
     // Inherits @nogc from K opEquals()
     //
-    private hash_t findUpdateIndex(const hash_t start_index, const hash_t computed_hash, ref K key)
+    private hash_t findUpdateIndex(K)(const hash_t start_index, const hash_t computed_hash, ref K key)
     in 
     {
         assert(computed_hash < DELETED_HASH);
@@ -437,7 +466,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     /// key in table
     /// Returns: pointer to stored value (if key in table) or null 
     ///
-    V* opBinaryRight(string op)(K k) if (op == "in")
+    V* opBinaryRight(string op, K)(K k) if (op == "in")
     {
 
         if ( _buckets_num == 0 ) return null;
@@ -445,10 +474,10 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         immutable computed_hash = hash_function(k) & HASH_MASK;
         immutable start_index = computed_hash & _mask;
         immutable lookup_index = findEntryIndex(start_index, computed_hash, k);
-        if ( lookup_index == hash_t.max) {
+        if ( lookup_index == hash_t.max ) {
             return null;
         }
-        static if ( is(V==StoredValueType) )
+        static if (is(V == StoredValueType))
         {
             return &_buckets[lookup_index].value;
         }
@@ -459,11 +488,31 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
     }
 
+    auto opBinaryRight(string op, K)(K k) const if (op == "in") {
+
+        if (_buckets_num == 0)
+            return null;
+
+        immutable computed_hash = hash_function(k) & HASH_MASK;
+        immutable start_index = computed_hash & _mask;
+        immutable lookup_index = findEntryIndex(start_index, computed_hash, k);
+        if (lookup_index == hash_t.max) {
+            return null;
+        }
+        static if (is(V == StoredValueType)) {
+            return &_buckets[lookup_index].value;
+        }
+        else {
+            V* r = () @trusted { return cast(V*)&_buckets[lookup_index].value; }();
+            return r;
+        }
+    }
+
     ///
     /// get value from hash or add if key is not in table. defaultValue can be callable.
     /// Returns: ref to value (maybe added)
     ///
-    ref V getOrAdd(T)(K k, T defaultValue)
+    ref V getOrAdd(K, T)(K k, T defaultValue)
     {
         V* v = k in this;
         if ( v )
@@ -567,11 +616,19 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     /// Throws exception if key not found
     /// Returns: value for given key
     ///
-    ref V opIndex(K k)
-    {
-        V* v = k in this;
-        if ( v !is null )
-        {
+    // ref V opIndex(K)(K k)
+    // {
+    //     V* v = k in this;
+    //     if (v !is null)
+    //     {
+    //         return *v;
+    //     }
+    //     throw new KeyNotFound();
+    // }
+
+    auto opIndex(K)(K k) inout {
+        auto v = k in this;
+        if (v !is null) {
             return *v;
         }
         throw new KeyNotFound();
@@ -580,7 +637,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     ///
     /// map[k] = v;
     ///
-    void opIndexAssign(V v, K k)
+    void opIndexAssign(K)(V v, K k)
     {
         put(k, v);
     }
@@ -591,7 +648,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     /// It can resize table if table is overloaded or has too much deleted entries.
     /// Returns: pointer to placed value (pointer is valid until next resize).
     ///
-    V* put(K k, V v)
+    V* put(K)(K k, V v)
     out
     {
         assert(__result !is null);
@@ -1517,8 +1574,8 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
             C v = hashMap.getOrAdd(-1, () => new C(-1));
             assert(-1 in hashMap && v.v == "-1");
             assert(hashMap[-1].v == "-1");
-            hashMap[-1].v ~= "1";
-            assert(hashMap[-1].v == "-11");
+            //hashMap[-1].v ~= "1";
+            //assert(hashMap[-1].v == "-11");
             assertThrown!KeyNotFound(hashMap[-2]);
             // check lazyness
             bool called;
@@ -1912,4 +1969,56 @@ unittest
     }
     assert(map.addIfMissed(101,101));
     assert(!map.addIfMissed(101, 102));
+}
+
+@safe unittest {
+    class CM {}
+    class C {
+        hash_t c;
+        override hash_t toHash() const @safe {
+            return c;
+        }
+
+        bool opEquals(const C other) const @safe {
+            return c == other.c;
+        }
+
+        this(hash_t i) {
+            c = i;
+        }
+    }
+    // try const keys
+    HashMap!(C, int) map;
+    int* f(const C c) {
+        auto v = map[c];
+        // can't do this with classes because put require key assignment which can't convert const object to mutable
+        //map.put(c, 2);
+        return c in map;
+    }
+
+    C c = new C(1);
+    map[c] = 1;
+    f(c);
+    /// try const map
+    const HashMap!(C, bool) cmap;
+    auto a = c in cmap;
+    try {
+        auto b = cmap[c];
+    } catch(Exception e) {
+    }
+
+    struct S {
+        int[] a;
+        void opAssign(const S rhs) {
+        }
+    }
+    HashMap!(S, int) smap;
+    int* fs(const S s) {
+        // can be done with struct if there is no references or if you have defined opAssign from const
+        smap.put(s, 2); 
+        return s in smap;
+    }
+    S s = S();
+    fs(s);
+    ///
 }

@@ -92,6 +92,24 @@ Iterators:
 * `byValue()` - returns range of all values in table without any order. Unstable - become invalid if you add/remove keys while use byValue range.
 * `byPair()` - returns range of all key-value pairs in table without any order. Unstable - invalid if you add/remove keys while use byPair range. Range elements are named tuples with `.key` and `.value` items.
 
+For any lookup methpd you can use const key, for put() or getOrAdd you can use const keys only if key type supply opAssign(const K rhs):
+```d
+    struct S {
+        int[] a;
+        void opAssign(const S rhs) {
+        }
+    }
+    HashMap!(S, int) smap;
+    int* fs(const S s) {
+        // can be done with struct if there is no references or if you have defined opAssign from const
+        smap.put(s, 2); 
+        return s in smap;
+    }
+    S s = S();
+    fs(s);
+```
+
+
 ## OrderedHashMap ##
 
 HashMap that keeps order of item insertion. Can me slower, as it uses list and hash map to provide ordering property

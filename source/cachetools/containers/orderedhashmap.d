@@ -295,3 +295,35 @@ unittest {
     dict1.remove(0);
     assert(equal(dict1.byKey, iota(1,100)));
 }
+
+@safe unittest {
+    class C {
+        hash_t c;
+        override hash_t toHash() const @safe {
+            return c;
+        }
+
+        bool opEquals(const C other) const @safe {
+            return c == other.c;
+        }
+
+        this(hash_t i) {
+            c = i;
+        }
+        // void opCast(const C from) {
+        //     c = from.c;
+        // }
+    }
+
+    OrderedHashMap!(C, int) map;
+    int* f(const C c) {
+        auto v = map[c];
+        // can't do this with classes because put require key assignment which can't convert const object to mutable
+        //map.put(c, 2);
+        return c in map;
+    }
+
+    C c = new C(1);
+    map[c] = 1;
+    f(c);
+}
