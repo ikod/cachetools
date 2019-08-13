@@ -122,9 +122,13 @@ public:
     assert(s.length == 4);
 
     auto other = set(only("and", "bye", "!"));
-    auto cross = s.intersection(other);
-    assert("bye" in cross);
-    assert("!"  !in cross);
+    auto cross0 = s.intersection(other);
+    assert("bye" in cross0);
+    assert("!"  !in cross0);
+    auto cross1 = other.intersection(s);
+    assert(cross0.length == cross1.length);
+    assert("and" in cross0 && "and" in cross1);
+    assert("bye" in cross0 && "bye" in cross1);
 
     auto nums = set(iota(10));
     auto someNums = nums.difference(set(only(1,2,3)));
