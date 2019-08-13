@@ -70,29 +70,26 @@ $('#symbolSearchPane').show();</script>
 			</ul>
 		</nav>
 		<div id="main-contents">
-			<h1>Module cachetools.cache2q</h1><p></p>
-			<section></section>
-			<section>
-				<h2>Aliases</h2>
-				<table>
-					<col class="caption"/>
-					<tr>
-						<th>Name</th><th>Type</th><th>Description</th>
-					</tr>
-					<tr>
-						<td>
-							<a id="TimeType" class="public" href="../cachetools/cache2q/TimeType.html">
-								<code>TimeType</code>
-							</a>
-						</td>
-						<td>
-							<code class="prettyprint lang-d"><span class="pln">core<wbr/></span><span class="pun">.</span><span class="pln">time<wbr/></span><span class="pun">.</span><span class="typ">MonoTimeImpl</span>!(2)</code>
-						</td>
-						<td>2Q cache is variant of multi-level LRU cache. Original paper http://www.vldb.org/conf/1994/P439.PDF
+			<h1>Module cachetools.cache2q</h1><p>2Q cache is variant of multi-level LRU cache. Original paper http://www.vldb.org/conf/1994/P439.PDF
     It is adaptive, scan-resistant and can give more hits than plain LRU.
     <p>This cache consists from three parts (In, Out and Main) where 'In' receive all new elements, 'Out' receives all
     overflows from 'In', and 'Main' is LRU cache which hold all long-lived data.</p>
-</td>
+</p>
+			<section></section>
+			<section>
+				<h2>Classes</h2>
+				<table>
+					<col class="caption"/>
+					<tr>
+						<th>Name</th><th>Description</th>
+					</tr>
+					<tr>
+						<td>
+							<code>
+								<a id="Cache2Q" class="public" href="../cachetools/cache2q/Cache2Q.html">Cache2Q</a>
+							</code>
+						</td>
+						<td></td>
 					</tr>
 				</table>
 			</section>

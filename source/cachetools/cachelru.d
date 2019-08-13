@@ -1,24 +1,9 @@
 ///
-module cachetools.cachelru;
-
-import std.typecons;
-import std.exception;
-import core.time;
-
-private import std.experimental.allocator;
-private import std.experimental.allocator.mallocator : Mallocator;
-
-private import cachetools.internal;
-private import cachetools.interfaces;
-private import cachetools.containers.hashmap;
-private import cachetools.containers.lists;
-
-
-///
 /// CacheLRU contains maximum `size` items
+///
 /// Eviction policy:
-/// 1. evict TTL-ed entry (if TTL enabled), otherwise
-/// 2. if oldest entry not expired - evict oldest accessed (LRU)
+/// $(UL evict TTL-ed entry (if TTL enabled), otherwise)
+/// $(UL if oldest entry not expired - evict oldest accessed (LRU))
 ///
 /// User can be informed about evicted entries via cache event list.
 ///
@@ -38,9 +23,25 @@ private import cachetools.containers.lists;
 /// Each element in dlist have two sets of double-links - first set create order by access time, second set
 /// for creation time.
 ///
+module cachetools.cachelru;
+
+import std.typecons;
+import std.exception;
+import core.time;
+
+private import std.experimental.allocator;
+private import std.experimental.allocator.mallocator : Mallocator;
+
+private import cachetools.internal;
+private import cachetools.interfaces;
+private import cachetools.containers.hashmap;
+private import cachetools.containers.lists;
+
+
 
 alias TimeType = MonoTimeImpl!(ClockType.coarse);
 
+///
 class CacheLRU(K, V, Allocator = Mallocator)
 {
     private

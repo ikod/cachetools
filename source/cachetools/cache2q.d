@@ -1,4 +1,9 @@
-///
+/**
+    2Q cache is variant of multi-level LRU cache. Original paper http://www.vldb.org/conf/1994/P439.PDF
+    It is adaptive, scan-resistant and can give more hits than plain LRU.
+    $(P This cache consists from three parts (In, Out and Main) where 'In' receive all new elements, 'Out' receives all
+    overflows from 'In', and 'Main' is LRU cache which hold all long-lived data.)
+**/
 module cachetools.cache2q;
 
 /// Implements Q2 cache
@@ -52,15 +57,10 @@ begin
     end if
 end 
 */
-/**
-    2Q cache is variant of multi-level LRU cache. Original paper http://www.vldb.org/conf/1994/P439.PDF
-    It is adaptive, scan-resistant and can give more hits than plain LRU.
-    $(P This cache consists from three parts (In, Out and Main) where 'In' receive all new elements, 'Out' receives all
-    overflows from 'In', and 'Main' is LRU cache which hold all long-lived data.)
-**/
 
 alias TimeType = MonoTimeImpl!(ClockType.coarse);
 
+///
 class Cache2Q(K, V, Allocator=Mallocator)
 {
     private

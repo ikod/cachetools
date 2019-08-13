@@ -70,29 +70,48 @@ $('#symbolSearchPane').show();</script>
 			</ul>
 		</nav>
 		<div id="main-contents">
-			<h1>Module cachetools.cachelru</h1><p></p>
+			<h1>Module cachetools.cachelru</h1><p>CacheLRU contains maximum <code class="lang-d"><span class="pln">size</span></code> items
+</p><section><p>Eviction policy:
+<ul>evict TTL-ed entry (if TTL enabled), otherwise</ul>
+<ul>if oldest entry not expired - evict oldest accessed (LRU)</ul>
+</p>
+
+<p>User can be informed about evicted entries via cache event list.
+</p>
+
+
+<p>Implemented as HashMap and multi-dlist.
+</p>
+
+<p><b>HashMap</b> keeps <ol><li>cached value.</li>
+<li>pointer to dlist element.</li>
+<li>creation time (to check expiration and purge expired entry on get() without access to dlist).</li>
+</ol>
+</p>
+
+<p><b>dlist</b> keep key, creation timestamp (to check expiration) <ol><li>key, so that we can remove entries from hashmap for lists heads (AccessIndex and TimeIndex)</li>
+<li>creation time, so that we can check expiration for 'TimeIndex'</li>
+</ol>
+Each element in dlist have two sets of double-links - first set create order by access time, second set
+for creation time.
+</p>
+</section>
+
 			<section></section>
 			<section>
-				<h2>Aliases</h2>
+				<h2>Classes</h2>
 				<table>
 					<col class="caption"/>
 					<tr>
-						<th>Name</th><th>Type</th><th>Description</th>
+						<th>Name</th><th>Description</th>
 					</tr>
 					<tr>
 						<td>
-							<a id="TimeType" class="public" href="../cachetools/cachelru/TimeType.html">
-								<code>TimeType</code>
-							</a>
+							<code>
+								<a id="CacheLRU" class="public" href="../cachetools/cachelru/CacheLRU.html">CacheLRU</a>
+							</code>
 						</td>
-						<td>
-							<code class="prettyprint lang-d"><span class="pln">core<wbr/></span><span class="pun">.</span><span class="pln">time<wbr/></span><span class="pun">.</span><span class="typ">MonoTimeImpl</span>!(2)</code>
-						</td>
-						<td>CacheLRU contains maximum <code class="lang-d"><span class="pln">size</span></code> items
-Eviction policy:
-1. evict TTL-ed entry (if TTL enabled), otherwise
-2. if oldest entry not expired - evict oldest accessed (LRU)
-</td>
+						<td></td>
 					</tr>
 				</table>
 			</section>

@@ -114,7 +114,11 @@ $('#symbolSearchPane').show();</script>
 					<a href="./cachetools/cache2q.html">cachetools.cache2q</a>
 				</td>
 				<td>
-					
+					2Q cache is variant of multi-level LRU cache. Original paper http://www.vldb.org/conf/1994/P439.PDF
+    It is adaptive, scan-resistant and can give more hits than plain LRU.
+    <p>This cache consists from three parts (In, Out and Main) where 'In' receive all new elements, 'Out' receives all
+    overflows from 'In', and 'Main' is LRU cache which hold all long-lived data.</p>
+
 				</td>
 			</tr>
 			<tr>
@@ -122,7 +126,8 @@ $('#symbolSearchPane').show();</script>
 					<a href="./cachetools/cachelru.html">cachetools.cachelru</a>
 				</td>
 				<td>
-					
+					CacheLRU contains maximum <code class="lang-d"><span class="pln">size</span></code> items
+
 				</td>
 			</tr>
 			<tr>
