@@ -4,7 +4,7 @@ module cachetools.containers.hashmap;
 import std.traits;
 import std.format;
 import std.typecons;
-
+import std.algorithm: map;
 import core.memory;
 import core.bitop;
 
@@ -462,18 +462,33 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     //
     // Lookup methods
     //
+    private hash_t getLookupIndex(K)(ref K k) {
+        if ( _buckets_num == 0 ) {
+            return hash_t.max;
+        }
+        immutable computed_hash = hash_function(k) & HASH_MASK;
+        immutable start_index = computed_hash & _mask;
+        immutable lookup_index = findEntryIndex(start_index, computed_hash, k);
+        return lookup_index;
+    }
 
+    private hash_t getLookupIndex(K)(ref K k) const {
+        if (_buckets_num == 0) {
+            return hash_t.max;
+        }
+        immutable computed_hash = hash_function(k) & HASH_MASK;
+        immutable start_index = computed_hash & _mask;
+        immutable lookup_index = findEntryIndex(start_index, computed_hash, k);
+        return lookup_index;
+    }
     /// key in table
     /// Returns: pointer to stored value (if key in table) or null 
     ///
     V* opBinaryRight(string op, K)(K k) if (op == "in")
     {
 
-        if ( _buckets_num == 0 ) return null;
+        immutable lookup_index = getLookupIndex(k);
 
-        immutable computed_hash = hash_function(k) & HASH_MASK;
-        immutable start_index = computed_hash & _mask;
-        immutable lookup_index = findEntryIndex(start_index, computed_hash, k);
         if ( lookup_index == hash_t.max ) {
             return null;
         }
@@ -483,19 +498,15 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
         else
         {
-            V* r = () @trusted {return cast(V*)&_buckets[lookup_index].value;}();
+            V* r = cast(V*)&_buckets[lookup_index].value;
             return r;
         }
     }
 
     auto opBinaryRight(string op, K)(K k) const if (op == "in") {
 
-        if (_buckets_num == 0)
-            return null;
+        immutable lookup_index = getLookupIndex(k);
 
-        immutable computed_hash = hash_function(k) & HASH_MASK;
-        immutable start_index = computed_hash & _mask;
-        immutable lookup_index = findEntryIndex(start_index, computed_hash, k);
         if (lookup_index == hash_t.max) {
             return null;
         }
@@ -503,22 +514,34 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
             return &_buckets[lookup_index].value;
         }
         else {
-            V* r = () @trusted { return cast(V*)&_buckets[lookup_index].value; }();
+            V* r = cast(V*)&_buckets[lookup_index].value;
             return r;
         }
     }
-
+    ///
+    /// fetch is safe(do not return pointer) and nogc (do not throw exception)
+    /// variant of "in" but in exchange of the cost of returning value instead of pointer
+    /// we return ok = true and value if key in map, ok = false otherwise
+    ///
+    auto fetch(K)(K k) {
+        immutable lookup_index = getLookupIndex(k);
+        if ( lookup_index == hash_t.max ) {
+            return tuple!("ok", "value")(false, V.init);
+        }
+        return tuple!("ok", "value")(true, _buckets[lookup_index].value);
+    }
     ///
     /// get value from hash or add if key is not in table. defaultValue can be callable.
     /// Returns: ref to value (maybe added)
     ///
-    ref V getOrAdd(K, T)(K k, T defaultValue)
+    V getOrAdd(K, T)(K k, T defaultValue)
     {
-        V* v = k in this;
-        if ( v )
-        {
-            return *v;
+        immutable lookup_index = getLookupIndex(k);
+
+        if (lookup_index != hash_t.max) {
+            return _buckets[lookup_index].value;
         }
+
         static if ( is(T == V) || isAssignable!(V, T))
         {
             return *put(k, defaultValue);
@@ -541,10 +564,12 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     /// Returns: true if key were added.
     ///
     bool addIfMissed(T)(K k, T value) {
-        V* v = k in this;
-        if (v) {
+        immutable lookup_index = getLookupIndex(k);
+
+        if (lookup_index != hash_t.max) {
             return false;
         }
+
         static if (is(T == V) || isAssignable!(V, T)) {
             put(k, value);
             return true;
@@ -554,7 +579,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
             return true;
         }
         else {
-            static assert(0, "what?");
+            static assert(0, "Can't assign value");
         }
     }
 
@@ -584,17 +609,20 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         _grow_factor = gf;
     }
     ///
-    /// get
+    /// get with default value
+    /// it infers @safe, @nogc from user data: do not return ptr and do not thow
+    /// 
     /// Returns: value from hash, or defaultValue if key not found (see also getOrAdd).
     /// defaultValue can be callable.
     ///
-    V get(T)(K k, T defaultValue)
+    V get(T)(K k, T defaultValue) inout
     {
-        V* v = k in this;
-        if ( v )
-        {
-            return *v;
+        immutable lookup_index = getLookupIndex(k);
+
+        if (lookup_index != hash_t.max) {
+            return _buckets[lookup_index].value;
         }
+
         static if (is(V == T) || isAssignable!(V, T))
         {
             return defaultValue;
@@ -616,22 +644,19 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     /// Throws exception if key not found
     /// Returns: value for given key
     ///
-    // ref V opIndex(K)(K k)
-    // {
-    //     V* v = k in this;
-    //     if (v !is null)
-    //     {
-    //         return *v;
-    //     }
-    //     throw new KeyNotFound();
-    // }
-
     auto opIndex(K)(K k) inout {
-        auto v = k in this;
-        if (v !is null) {
-            return *v;
+        immutable lookup_index = getLookupIndex(k);
+
+        if (lookup_index == hash_t.max) {
+            throw new KeyNotFound();
         }
-        throw new KeyNotFound();
+
+        static if (is(V == StoredValueType)) {
+            return _buckets[lookup_index].value;
+        }
+        else {
+            return cast(V)_buckets[lookup_index].value;
+        }
     }
 
     ///
@@ -726,9 +751,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
 
         debug(cachetools) safe_tracef("remove k: %s", k);
 
-        immutable computed_hash = hash_function(k) & HASH_MASK;
-        immutable start_index = computed_hash & _mask;
-        immutable lookup_index = findEntryIndex(start_index, computed_hash, k);
+        immutable lookup_index = getLookupIndex(k);
         if ( lookup_index == hash_t.max )
         {
             // nothing to remove
@@ -791,113 +814,80 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         return _buckets_num;
     }
 
-    /// iterator by keys
-    auto byKey() pure @safe @nogc
-    {
-        struct _kvRange {
-            int         _pos;
-            ulong       _buckets_num;
-            _Bucket[]   _buckets;
-            this(_Bucket[] _b)
-            {
-                _buckets = _b;
-                _buckets_num = _b.length;
-                _pos = 0;
-                while( _pos < _buckets_num  && _buckets[_pos].hash < ALLOCATED_HASH )
-                {
-                    _pos++;
+    private struct _kvRange{
+        int         _pos;
+        ulong       _buckets_num;
+        _Bucket[]   _buckets;
+        this(this) {
+            auto _new_buckets = makeArray!(_Bucket)(allocator, _buckets_num);
+            static if (UseGCRanges!(Allocator, K, V, GCRangesAllowed)) {
+                () @trusted {
+                    GC.addRange(_new_buckets.ptr, _buckets_num * _Bucket.sizeof);
+                }();
+            }
+            for (int i = 0; i < _buckets_num; i++) {
+                _new_buckets[i] = _buckets[i];
+            }
+            _buckets = _new_buckets;
+        }
+
+        ~this() {
+            () @trusted {
+                static if (UseGCRanges!(Allocator, K, V, GCRangesAllowed)) {
+                    GC.removeRange(_buckets.ptr);
                 }
-            }
-            bool empty() const pure nothrow @safe @nogc {
-                return _pos == _buckets_num;
-            }
+                dispose(allocator, _buckets.ptr);
+            }();
+        }
 
-            K front() {
-                return _buckets[_pos].key;
+        this(_Bucket[] _b) {
+            _buckets_num = _b.length;
+            _buckets = makeArray!(_Bucket)(allocator, _buckets_num);
+            static if (UseGCRanges!(Allocator, K, V, GCRangesAllowed)) {
+                () @trusted {
+                    GC.addRange(_buckets.ptr, _buckets_num * _Bucket.sizeof);
+                }();
             }
-
-            void popFront() pure nothrow @safe @nogc {
+            for (int i = 0; i < _buckets_num; i++) {
+                _buckets[i] = _b[i];
+            }
+            _pos = 0;
+            while (_pos < _buckets_num && _buckets[_pos].hash < ALLOCATED_HASH) {
                 _pos++;
-                while( _pos < _buckets_num && _buckets[_pos].hash <  ALLOCATED_HASH )
-                {
-                    _pos++;
-                }
             }
         }
-        return _kvRange(_buckets);
+
+        bool empty() const pure nothrow @safe @nogc {
+            return _pos == _buckets_num;
+        }
+
+        auto front() {
+            return Tuple!(K, "key", V, "value")(_buckets[_pos].key, _buckets[_pos].value);
+        }
+
+        void popFront() pure nothrow @safe @nogc {
+            _pos++;
+            while (_pos < _buckets_num && _buckets[_pos].hash < ALLOCATED_HASH) {
+                _pos++;
+            }
+        }
+    }
+
+    /// iterator by keys
+    auto byKey()
+    {
+        return _kvRange(_buckets).map!"a.key";
     }
 
     /// iterator by values
-    auto byValue() pure @safe {
-        struct _kvRange {
-            int         _pos;
-            ulong       _buckets_num;
-            _Bucket[]   _buckets;
-            this(_Bucket[] _b)
-            {
-                _buckets = _b;
-                _buckets_num = _b.length;
-                _pos = 0;
-                while( _pos < _buckets_num  && _buckets[_pos].hash < ALLOCATED_HASH )
-                {
-                    _pos++;
-                }
-            }
-            bool empty() const pure nothrow @safe @nogc {
-                return _pos == _buckets_num;
-            }
-
-            V front() {
-                return _buckets[_pos].value;
-            }
-
-            void popFront() pure nothrow @safe @nogc {
-                _pos++;
-                while( _pos < _buckets_num && _buckets[_pos].hash < ALLOCATED_HASH )
-                {
-                    _pos++;
-                }
-            }
-        }
-        return _kvRange(_buckets);
+    auto byValue()
+    {
+        return _kvRange(_buckets).map!"a.value";
     }
 
     /// iterator by key/value pairs
-    auto byPair() pure @safe
+    auto byPair()
     {
-        import std.typecons;
-
-        struct _kvRange {
-            int         _pos;
-            ulong       _buckets_num;
-            _Bucket[]   _buckets;
-            this(_Bucket[] _b)
-            {
-                _buckets = _b;
-                _buckets_num = _b.length;
-                _pos = 0;
-                while( _pos < _buckets_num  && _buckets[_pos].hash < ALLOCATED_HASH )
-                {
-                    _pos++;
-                }
-            }
-            bool empty() const pure nothrow @safe @nogc
-            {
-                return _pos == _buckets_num;
-            }
-            auto front() @safe
-            {
-                return Tuple!(K, "key", V, "value")(_buckets[_pos].key, _buckets[_pos].value);
-            }
-            void popFront() pure nothrow @safe @nogc
-            {
-                _pos++;
-                while( _pos < _buckets_num && _buckets[_pos].hash < ALLOCATED_HASH )
-                {
-                    _pos++;
-                }
-            }
-        }
         return _kvRange(_buckets);
     }
 }
@@ -912,9 +902,9 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     // count words, simplest and fastest way
     foreach (word; words)
     {
-        counter.getOrAdd(word, 0)++;
+        counter[word] = counter.getOrAdd(word, 0) + 1;
     }
-    assert("world" !in counter);
+    assert(!counter.fetch("world").ok);
     assert(counter["hello"] == 1);
     assert(counter["should"] == 2);
     assert(counter.length == words.length - 1);
@@ -934,7 +924,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
             counter[word] = 1;
         }
     }
-    assert("world" !in counter);
+    assert(!counter.fetch("world").ok);
     assert(counter["hello"] == 1);
     assert(counter["should"] == 2);
     assert(counter.length == words.length - 1);
@@ -962,19 +952,20 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
                 hashMap.put(i, i);
             }
             foreach (i;0..10) {
-                assert(i==*(i in hashMap));
+                auto v = hashMap.fetch(i);
+                assert(v.ok && v.value == i);
             }
             assert(hashMap.length == 10);
             hashMap.remove(0);
             assert(hashMap.length == 9);
-            assert((0 in hashMap) is null);
+            assert(!hashMap.fetch(0).ok);
             hashMap.remove(1);
             assert(hashMap.length == 8);
-            assert((1 in hashMap) is null);
-            assert(8 in hashMap);
+            assert(!hashMap.fetch(1).ok);
+            assert(hashMap.fetch(8).ok);
             hashMap.remove(8);
             assert(hashMap.length == 7);
-            assert((8 in hashMap) is null);
+            assert(!hashMap.fetch(8).ok);
             foreach (i;0..10) {
                 hashMap.put(i, i);
             }
@@ -982,8 +973,8 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
             hashMap.remove(8);
             hashMap.remove(1);
             assert(hashMap.length == 8);
-            assert((1 in hashMap) is null);
-            assert((8 in hashMap) is null);
+            assert(!hashMap.fetch(1).ok);
+            assert(!hashMap.fetch(8).ok);
             assert(hashMap.remove(1) == false);
             foreach (i;0..10) {
                 hashMap.remove(i);
@@ -1081,8 +1072,8 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
             T hs2;
             immutable ss = S(1);
             hs2[1] = ss;
-            assert(1 in hs2 && *(1 in hs2) == ss);
-            assert(!(2 in hs2));
+            // assert(1 in hs2 && *(1 in hs2) == ss);
+            // assert(!(2 in hs2));
         }();
     }
     // class
@@ -1450,13 +1441,14 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
 //
 // test clear
 //
-@safe @nogc nothrow unittest
-{
+@safe @nogc nothrow unittest {
     // test clear
+    import std.algorithm;
+    import std.array;
 
     HashMap!(int, int) hashMap;
 
-    foreach(i;0..100) {
+    foreach (i; 0 .. 100) {
         hashMap[i] = i;
     }
     hashMap.clear();
@@ -1464,6 +1456,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     hashMap[1] = 1;
     assert(1 in hashMap && hashMap.length == 1);
 }
+
 //
 // test getOrAdd with value
 //
@@ -1719,7 +1712,7 @@ unittest
     class C
     {
         int s;
-        bool opEquals(const C other) @safe @nogc
+        bool opEquals(const C other) inout @safe @nogc
         {
             return s == other.s;
         }
@@ -1817,9 +1810,12 @@ unittest
     class C
     {
         int s;
-        this(int i) @safe @nogc
+        this(int i) @safe @nogc immutable
         {
             s = i;
+        }
+        bool opEquals(C other) const {
+            return s == other.s;
         }
     }
 
@@ -1834,7 +1830,6 @@ unittest
         HashMap!(string, T) map;
         map["c0"] = c0;
         map["c1"] = c1;
-        assert("c0" in map && "c1" in map);
         assert(map.get("c0", c2) is c0);
         assert(map.get("c1", c2) is c1);
         assert(map.getOrAdd("c2", c2) is c2);
@@ -1856,7 +1851,7 @@ unittest
     class C
     {
         int s;
-        bool opEquals(const C other) @nogc
+        bool opEquals(const C other) inout @nogc
         {
             return s == other.s;
         }
@@ -1901,12 +1896,12 @@ unittest
     class C
     {
         int s;
-        bool opEquals(const C other) @safe
+        bool opEquals(const C other) inout @safe
         {
             return s == other.s;
         }
 
-        override hash_t toHash() @safe
+        override hash_t toHash() const @safe
         {
             return hash_function(s);
         }
@@ -2021,4 +2016,52 @@ unittest
     S s = S();
     fs(s);
     ///
+}
+@safe unittest {
+    import std.stdio;
+    import std.array;
+    import std.algorithm;
+    import std.range;
+    import std.conv;
+
+    class C {
+        int c;
+        this(int i) {
+            c = i;
+        }
+        override hash_t toHash() const @safe @nogc {
+            return hash_function(c);
+        }
+        bool opEquals(const C other) @safe {
+            return c == other.c;
+        }
+    }
+    HashMap!(int, C) h;
+    foreach(i;0..500) {
+        h[i] = new C(i);
+    }
+    auto pairs = h.byPair();
+    auto keys = h.byKey();
+    auto values = h.byValue();
+    h.clear();
+    foreach (i; 0 .. 50000) {
+        h[i] = new C(i);
+    }
+    auto after_clear_pairs = pairs.array.sort!"a.key < b.key";
+    assert(equal(after_clear_pairs.map!"a.key", iota(500)));
+    assert(equal(after_clear_pairs.map!"a.value.c", iota(500)));
+
+    auto after_clear_keys = keys.array.sort!"a < b";
+    assert(equal(after_clear_keys, iota(500)));
+
+    auto after_clear_values = values.array.sort!"a.c < b.c".map!"a.c";
+    assert(equal(after_clear_values, iota(500)));
+
+    HashMap!(C, int) hc;
+    auto nc = new C(1);
+    hc[nc] = 1;
+    auto p = hc.fetch(nc);
+    assert(p.ok && p.value == 1);
+    p = hc.fetch(new C(2));
+    assert( !p.ok );
 }
