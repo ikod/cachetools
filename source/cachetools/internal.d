@@ -54,3 +54,23 @@ bool UseGCRanges(Allocator, K, V, bool GCRangesAllowed)()
 
     return  !is(Allocator == GCAllocator) && (hasIndirections!K || hasIndirections!V ) && GCRangesAllowed;
 }
+
+///
+/// Return true if it is worth to store values inline in hash table
+/// V footprint should be small enough
+///
+package bool SmallValueFootprint(V)() {
+    import std.traits;
+
+    static if (isNumeric!V || isSomeString!V || isSomeChar!V || isPointer!V) {
+        return true;
+    }
+    else static if (is(V == struct) && V.sizeof <= (void*).sizeof) {
+        return true;
+    }
+    else static if (is(V == class) && __traits(classInstanceSize, V) <= (void*).sizeof) {
+        return true;
+    }
+    else
+        return false;
+}

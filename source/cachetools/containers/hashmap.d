@@ -48,25 +48,6 @@ else static if (hash_t.sizeof == 4) {
     enum HASH_MASK = 0x0F_FF_FF_FF;
 }
 
-///
-/// Return true if it is worth to store values inline in hash table
-/// V footprint should be small enough
-///
-package bool SmallValueFootprint(V)() {
-    import std.traits;
-
-    static if (isNumeric!V || isSomeString!V || isSomeChar!V || isPointer!V) {
-        return true;
-    }
-    else static if (is(V == struct) && V.sizeof <= (void*).sizeof) {
-        return true;
-    }
-    else static if (is(V == class) && __traits(classInstanceSize, V) <= (void*).sizeof) {
-        return true;
-    }
-    else
-        return false;
-}
 
 private bool keyEquals(K)(K a, K b) {
     static if (is(K == class)) {
@@ -116,7 +97,14 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
 
     package {
         alias allocator = Allocator.instance;
-
+        //
+        // Bucket is place where we store key, value and hash.
+        // High bits of hash are used to distinguish between allocated, removed and
+        // empty buckets.
+        // Buckets form contigous array. We keep this array refcounted, so that
+        // we can store reference to it from byPair, byKey, ... even if hashtable itself cleared or
+        // destroyed.
+        //
         struct _Bucket {
             hash_t hash;
             StoredKeyType key;
@@ -125,15 +113,17 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
                 import std.format;
 
                 return "%s, hash: %0x,key: %s, value: %s".format([
-            EMPTY_HASH: "free",
-            DELETED_HASH: "deleted",
-            ALLOCATED_HASH: "allocated"
-                        ][cast(long)(hash & TYPE_MASK)], hash, key, value);
+                        EMPTY_HASH: "free",
+                        DELETED_HASH: "deleted",
+                        ALLOCATED_HASH: "allocated"
+                ][cast(long)(hash & TYPE_MASK)], hash, key, value);
             }
         }
 
         private struct _BucketStorage {
+
             _Bucket[] bs;
+
             this(this) {
                 auto newbs = makeArray!(_Bucket)(allocator, bs.length);
                 () @trusted {
@@ -161,8 +151,8 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
                     static if (UseGCRanges!(Allocator, K, V, GCRangesAllowed)) {
                         GC.removeRange(bs.ptr);
                     }
-                    dispose(allocator, bs.ptr);
                 }();
+                dispose(allocator, bs.ptr);
             }
         }
 
