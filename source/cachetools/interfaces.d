@@ -1,10 +1,12 @@
 ///
 module cachetools.interfaces;
 
-import std.typecons;
-import std.datetime;
-import core.time;
-import std.typecons;
+private {
+    import std.typecons;
+    import std.datetime;
+    import core.time;
+    import std.typecons;
+}
 
 private import cachetools.internal;
 
@@ -70,7 +72,6 @@ struct CacheEvent(K, V)
     3. some value  - __ttl > 0
  */
 struct TTL {
-    import core.time;
 
     private Duration  __ttl = 0.seconds;
 

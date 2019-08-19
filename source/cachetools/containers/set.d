@@ -60,7 +60,7 @@ public:
     void join(K)(Set!K other) {
         if ( other.length == 0 ) return;
 
-        foreach(ref b; other._map._buckets) {
+        foreach(ref b; other._map._buckets.bs) {
             if ( b.hash >= ALLOCATED_HASH ) 
                 _map.put(b.key, true);
         }
@@ -72,12 +72,12 @@ public:
         if (other.length == 0 || this.length == 0 ) return result;
 
         if ( other.length < _map.length ) {
-            foreach (ref bucket; other._map._buckets) {
+            foreach (ref bucket; other._map._buckets.bs) {
                 if ( bucket.hash >= ALLOCATED_HASH && bucket.key in _map )
                     result.add(bucket.key);
             }
         } else {
-            foreach (ref bucket; _map._buckets) {
+            foreach (ref bucket; _map._buckets.bs) {
                 if (bucket.hash >= ALLOCATED_HASH && bucket.key in other._map)
                     result.add(bucket.key);
             }
@@ -88,7 +88,7 @@ public:
     auto difference(K)(Set!K other) {
         Set!K result;
         if ( other.length == 0 ) return this;
-        foreach (ref bucket; _map._buckets) {
+        foreach (ref bucket; _map._buckets.bs) {
             if (bucket.hash >= ALLOCATED_HASH && bucket.key !in other._map)
                 result.add(bucket.key);
         }

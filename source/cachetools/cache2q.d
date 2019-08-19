@@ -11,7 +11,6 @@ module cachetools.cache2q;
 
 private import std.experimental.allocator;
 private import std.experimental.allocator.mallocator : Mallocator;
-private import core.time;
 private import std.typecons;
 
 private import cachetools.internal;
@@ -58,13 +57,16 @@ begin
 end 
 */
 
-alias TimeType = MonoTimeImpl!(ClockType.coarse);
 
 ///
 class Cache2Q(K, V, Allocator=Mallocator)
 {
     private
     {
+        private import core.time;
+
+        private alias TimeType = MonoTimeImpl!(ClockType.coarse);
+
         struct ListElement {
             StoredType!K        key;    // we keep key here so we can remove element from map when we evict with LRU or TTL)
         }
@@ -288,7 +290,7 @@ class Cache2Q(K, V, Allocator=Mallocator)
                 {
                     __events.insertBack(CacheEvent!(K, V)(EventType.Expired, k, keyInOut.value));
                 }
-                () @trusted {
+                delegate void() @trusted {
                     _OutList.remove(keyInOut.list_element_ptr);
                 }();
                 _OutMap.remove(k);
@@ -298,7 +300,7 @@ class Cache2Q(K, V, Allocator=Mallocator)
             auto value = keyInOut.value;
             auto expired_at = keyInOut.expired_at;
 
-            () @trusted
+            delegate void() @trusted
             {
                 assert((*keyInOut.list_element_ptr).key == k);
                 _OutList.remove(keyInOut.list_element_ptr);
@@ -337,7 +339,7 @@ class Cache2Q(K, V, Allocator=Mallocator)
                 if (__reportCacheEvents) {
                     __events.insertBack(CacheEvent!(K, V)(EventType.Expired, k, keyInIn.value));
                 }
-                () @trusted {
+                delegate void () @trusted {
                     _InList.remove(keyInIn.list_element_ptr);
                 }();
                 _InMap.remove(k);
@@ -814,6 +816,9 @@ unittest {
     auto cjs = new Cache2Q!(JSONValue, string);
 
     class C {
+        // bool opEquals(const C other) {
+        //     return other is this;
+        // }
     }
     auto c1 = new Cache2Q!(C, string);
     auto cob1 = new C();

@@ -941,7 +941,7 @@ void main()
         CTHashMap!(string, int) count;
 
         void updateCount(string word) {
-            count.getOrAdd(word, 0)++;
+            count[word] = count.get(word, 0)+1;
         }
 
         foreach(word; words.range()) {
@@ -956,7 +956,7 @@ void main()
         CTHashMap!(string, int, GCAllocator) count;
 
         void updateCount(string word) {
-            count.getOrAdd(word, 0)++;
+            count[word] = count.get(word, 0)+1;
         }
 
         foreach(word; words.range()) {
@@ -1002,7 +1002,7 @@ void main()
         CTHashMap!(string, int) mycount;
 
         void updateMyCount(string word) {
-            mycount.getOrAdd(word, 0)++;
+            mycount[word] = mycount.get(word, 0)+1;
         }
 
         foreach(word; words.range()) {

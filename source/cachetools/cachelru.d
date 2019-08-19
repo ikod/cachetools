@@ -27,7 +27,6 @@ module cachetools.cachelru;
 
 import std.typecons;
 import std.exception;
-import core.time;
 
 private import std.experimental.allocator;
 private import std.experimental.allocator.mallocator : Mallocator;
@@ -39,11 +38,14 @@ private import cachetools.containers.lists;
 
 
 
-alias TimeType = MonoTimeImpl!(ClockType.coarse);
 
 ///
 class CacheLRU(K, V, Allocator = Mallocator)
 {
+    private import core.time;
+
+    private alias TimeType = MonoTimeImpl!(ClockType.coarse);
+
     private
     {
         enum size_t AccessIndex = 0;
@@ -457,7 +459,8 @@ unittest
 unittest
 {
     import std.experimental.allocator.mallocator;
-
+    import core.time;
+    
     alias allocator = Mallocator.instance;
     alias Cache = CacheLRU!(int, string);
 

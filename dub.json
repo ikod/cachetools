@@ -4,8 +4,24 @@
     "Igor Khasilev"
   ],
   "dependencies": {
+        "automem": "*"
   },
   "configurations":[
+    {
+      "name": "unittest",
+      "targetType": "executable",
+      "versions": ["TestingCacheTools"],
+      "preBuildCommands": [
+        "dub run --compiler=$$DC unit-threaded -c gen_ut_main -- -f bin/ut.d"
+      ],
+      "dependencies": {
+        "unit-threaded": "~>0"
+      },
+      "excludedSourceFiles": [
+        "src/main.d"
+      ],
+      "mainSourceFile": "bin/ut.d"
+    },
     {
       "name": "library",
       "targetType": "library"

@@ -45,7 +45,15 @@ struct OrderedHashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true)
         swap(__keys,keys);
         swap(__hashes, hashes);
     }
-
+    void opAssign(ref typeof(this) rhs) {
+        if ( rhs is this ) return;
+        foreach (k; rhs.__keys) {
+            auto p = __keys.insertBack(k);
+            if (auto vp = k in rhs.__hashes) {
+                __hashes.put(k, HashMapElement(vp.value, p));
+            }
+        }
+    }
     string toString() {
         import std.algorithm, std.array, std.format;
 
