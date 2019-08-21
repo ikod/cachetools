@@ -64,7 +64,7 @@ private bool keyEquals(K)(K a, K b) {
     }
 }
 
-@("keyEquals")
+@("L" ~ to!string(__LINE__) ~ ".keyEquals")
 @safe nothrow unittest {
     class C {
         int c;
@@ -345,7 +345,8 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         //
         // _deleted > _buckets_num / 8
         //
-        return _deleted << 3 > _buckets_num;
+        return false;
+        //return _deleted << 3 > _buckets_num;
     }
 
     private bool tooHighLoad() pure const @safe @nogc {
@@ -354,6 +355,11 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         // 5 * allocated > 4 * buckets_num
         //
         return _allocated + (_allocated << 2) > _buckets_num << 2;
+    }
+
+    public auto capacity() pure const @safe @nogc {
+        // capacity = 0.8*buckets_num - _allocated;
+        return (( _buckets_num << 2 ) / 5) - _allocated;
     }
 
     private void doResize(int dest) {
@@ -800,7 +806,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
 @safe unittest {
     import std.range;
     import std.algorithm;
-
+    import std.experimental.logger;
     HashMap!(string, int) counter;
     string[] words = [
         "hello", "this", "simple", "example", "should", "succeed", "or", "it",
@@ -810,6 +816,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     foreach (word; words) {
         counter[word] = counter.getOrAdd(word, 0) + 1;
     }
+    assert(counter.capacity ==  32*4/5 - counter.length);
     assert(!counter.fetch("world").ok);
     assert(counter["hello"] == 1);
     assert(counter["should"] == 2);
@@ -1953,4 +1960,35 @@ unittest {
     m1[new C(1)] = 1;
     m1 = m1;
     assert(m1[new C(1)] == 1);
+}
+
+@("L" ~ to!string(__LINE__) ~ ".reallocate works as for slices")
+@safe
+unittest {
+    HashMap!(int, string) amap, bmap;
+    int i;
+    do {
+        amap[i++] = "a";
+    } while(amap.capacity>0);
+    assert(amap.capacity == 0);
+    // at this point amap capacity is 0 and any insertion will resize/reallocate
+    bmap = amap;    // amap and bmap share underlying storage
+    assert(amap[0] == bmap[0]);
+    amap[i] = "a";          // after this assignment amap will reallocate
+    amap[0] = "b";          // this write goes to new store
+    assert(amap[0] == "b"); // amap use new storage
+    assert(bmap[0] == "a"); // bmap still use old storage
+
+    // the same story with dynamic arrays
+    int[4] sarray = [1,2,3,4];
+    int[] aslice = sarray[], bslice;
+    assert(aslice.capacity == 0);
+    // at this point aslice capacity is 0 and any appending will reallocate
+    bslice = aslice;                // aslice and bslice will share storage until aslice reallocate
+    assert(aslice[0] == bslice[0]);
+    assert(aslice[0] is bslice[0]);
+    aslice ~= 1;                    // this append reallocate
+    aslice[0] = 2;                  // this write goes to new storage
+    assert(bslice[0] == 1);         // bslice still use old storage
+    assert(aslice[0] == 2);         // aslice use new storage
 }
