@@ -4,8 +4,7 @@
     "Igor Khasilev"
   ],
   "dependencies": {
-        "automem": "*",
-        "optional": "*"
+        "automem": "*"
   },
   "configurations":[
     {

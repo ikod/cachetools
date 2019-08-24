@@ -6,8 +6,6 @@ private import std.experimental.allocator.gc_allocator;
 private import std.typecons;
 private import std.traits;
 
-private import optional;
-
 import cachetools.internal;
 import cachetools.containers.hashmap;
 import cachetools.containers.lists;
@@ -72,13 +70,13 @@ struct OrderedHashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true)
             // append to list and store in hashes
             auto keysptr = __keys.insertBack(k);
             __hashes.put(k, HashMapElement(v, keysptr));
-            return Optional!V();
+            return Nullable!V();
         }
         else
         {
             auto o = hashesptr.value;
             hashesptr.value = v;
-            return some(o);
+            return nullable(o);
         }
     }
     ///

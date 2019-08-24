@@ -12,7 +12,6 @@ import core.memory;
 import core.bitop;
 
 import automem: RefCounted, refCounted;
-import optional;
 
 private import std.experimental.allocator;
 private import std.experimental.allocator.mallocator : Mallocator;
@@ -669,9 +668,9 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
             }
             bucket.hash = computed_hash | ALLOCATED_HASH;
             _allocated++;
-            return Optional!(typeof(bucket.value))();
+            return Nullable!(typeof(bucket.value))();
         } else {
-            auto o = some(bucket.value);
+            auto o = nullable(bucket.value);
             bucket.value = v;
             return o;
         }
