@@ -2044,7 +2044,6 @@ unittest {
 
         this(this) @safe {
             counter++;
-            safe_tracef("counter: %d", counter);
             if (counter > 1 && throw_enabled ) throw new Exception("copy");
         }
         hash_t toHash() inout @safe {
