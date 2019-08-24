@@ -12,6 +12,7 @@ import core.memory;
 import core.bitop;
 
 import automem: RefCounted, refCounted;
+import optional;
 
 private import std.experimental.allocator;
 private import std.experimental.allocator.mallocator : Mallocator;
@@ -290,21 +291,21 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         do {
             immutable h = _buckets.bs[index].hash;
 
-            debug (cachetools)
-                safe_tracef("test update index %d (%s) for key %s", index, _buckets.bs[index], key);
+            // debug (cachetools)
+            //     safe_tracef("test update index %d (%s) for key %s", index, _buckets.bs[index], key);
 
             if (h <= DELETED_HASH) // empty or deleted
             {
-                debug (cachetools)
-                    safe_tracef("test update index %d (%s) for key %s - success",
-                            index, _buckets.bs[index], key);
+                // debug (cachetools)
+                //     safe_tracef("test update index %d (%s) for key %s - success",
+                //             index, _buckets.bs[index], key);
                 return index;
             }
             assert((h & TYPE_MASK) == ALLOCATED_HASH);
             if ((h & HASH_MASK) == computed_hash && keyEquals(_buckets.bs[index].key, key)) {
-                debug (cachetools)
-                    safe_tracef("test update index %d (%s) for key %s - success",
-                            index, _buckets.bs[index], key);
+                // debug (cachetools)
+                //     safe_tracef("test update index %d (%s) for key %s - success",
+                //             index, _buckets.bs[index], key);
                 return index;
             }
             index = (index + 1) & _mask;
@@ -345,8 +346,8 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         //
         // _deleted > _buckets_num / 8
         //
-        return false;
-        //return _deleted << 3 > _buckets_num;
+        //return false;
+        return _deleted << 3 > _buckets_num;
     }
 
     private bool tooHighLoad() pure const @safe @nogc {
@@ -481,10 +482,13 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
 
         static if (is(T == V) || isAssignable!(V, T)) {
-            return *put(k, defaultValue);
+            put(k, defaultValue);
+            return defaultValue;
         }
         else static if (isCallable!T && isAssignable!(V, ReturnType!T)) {
-            return *put(k, defaultValue());
+            auto vv = defaultValue();
+            put(k, vv);
+            return vv;
         }
         else {
             static assert(0, "what?");
@@ -608,7 +612,8 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     ///
     /// map[k] = v;
     ///
-    void opIndexAssign(K)(V v, K k) {
+    void opIndexAssign(K)(V v, K k)
+    do {
         put(k, v);
     }
     ///
@@ -618,10 +623,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     /// It can resize table if table is overloaded or has too much deleted entries.
     /// Returns: pointer to placed value (pointer is valid until next resize).
     ///
-    V* put(K)(K k, V v)
-    out {
-        assert(__result !is null);
-    }
+    auto put(K)(K k, V v)
     do {
         if (!_buckets_num) {
             _buckets_num = _empty = initial_buckets_num;
@@ -631,13 +633,12 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
 
         debug (cachetools)
-            safe_tracef("put k: %s, v: %s", k, v);
+            safe_tracef("put k: %s", k);
 
         if (tooHighLoad) {
             doResize(_grow_factor * _buckets_num);
         }
 
-        V* r; //result
         immutable computed_hash = hash_function(k) & HASH_MASK;
         immutable start_index = computed_hash & _mask;
         immutable placement_index = findUpdateIndex(start_index, computed_hash, k);
@@ -648,29 +649,32 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         debug (cachetools)
             safe_tracef("start_index: %d, placement_index: %d", start_index, placement_index);
 
+        //
+        // Each switch case contains same part of code, so that
+        // any exception in key or value assignment will not
+        // leave table in inconsistent state.
+        //
         if (h < ALLOCATED_HASH) {
             final switch (h) {
             case EMPTY_HASH:
+                bucket.value = v;
+                bucket.key = k;
                 _empty--;
                 break;
             case DELETED_HASH:
+                bucket.value = v;
+                bucket.key = k;
                 _deleted--;
                 break;
             }
+            bucket.hash = computed_hash | ALLOCATED_HASH;
             _allocated++;
-            bucket.key = k;
+            return Optional!(typeof(bucket.value))();
+        } else {
+            auto o = some(bucket.value);
+            bucket.value = v;
+            return o;
         }
-        debug (cachetools)
-            safe_tracef("place inline buckets[%d] '%s'='%s'", placement_index, k, v);
-        bucket.value = v;
-        static if (is(V == StoredValueType)) {
-            r = &bucket.value;
-        }
-        else {
-            () @trusted { r = cast(V*)&bucket.value; }();
-        }
-        bucket.hash = computed_hash | ALLOCATED_HASH;
-        return r;
     }
 
     ///
@@ -744,12 +748,14 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         ulong           _buckets_num;
         BucketStorage   _buckets;
         this(this) {
-            auto _new_buckets = BucketStorage(_buckets_num);
-            copy(_buckets.bs, _new_buckets.bs);
-            _buckets = _new_buckets;
-            _pos = 0;
-            while (_pos < _buckets_num && _buckets.bs[_pos].hash < ALLOCATED_HASH) {
-                _pos++;
+            if (_buckets_num) {
+                auto _new_buckets = BucketStorage(_buckets_num);
+                copy(_buckets.bs, _new_buckets.bs);
+                _buckets = _new_buckets;
+                _pos = 0;
+                while (_pos < _buckets_num && _buckets.bs[_pos].hash < ALLOCATED_HASH) {
+                    _pos++;
+                }
             }
         }
 
@@ -1991,4 +1997,79 @@ unittest {
     aslice[0] = 2;                  // this write goes to new storage
     assert(bslice[0] == 1);         // bslice still use old storage
     assert(aslice[0] == 2);         // aslice use new storage
+}
+
+@("L" ~ to!string(__LINE__) ~ ".table consistency after exception")
+@safe
+unittest {
+    import std.exception;
+    import std.stdio;
+    import std.format;
+    import std.array;
+
+    struct FaultyHash {
+        int c;
+        this(int i) {
+            c = i;
+        }
+
+        hash_t toHash() inout @safe {
+            if ( c > 0 )
+                throw new Exception("hash");
+            return hash_function(c);
+        }
+
+        bool opEquals(FaultyHash other) inout @safe {
+            return c == other.c;
+        }
+    }
+
+    HashMap!(FaultyHash, int) map;
+    auto c1 = FaultyHash(1);
+    assertThrown!Exception(map.put(c1, 1));
+    assertThrown!Exception(map[c1] = 1);
+    assert(map.length == 0);
+    auto c0 = FaultyHash(0);
+    map[c0] = 1;
+    assert(map.length == 1);
+
+    static int counter;
+    static bool throw_enabled = true;
+
+    struct FaultyCopyCtor {
+        int c;
+
+        this(int i) {
+            c = i;
+        }
+
+        this(this) @safe {
+            counter++;
+            safe_tracef("counter: %d", counter);
+            if (counter > 1 && throw_enabled ) throw new Exception("copy");
+        }
+        hash_t toHash() inout @safe {
+            return 0;
+        }
+
+        bool opEquals(FaultyCopyCtor other) @safe {
+            return true;
+        }
+        auto toString() inout {
+            return "[%d]".format(c);
+        }
+    }
+    FaultyCopyCtor fcc1 = FaultyCopyCtor(1);
+    HashMap!(int, FaultyCopyCtor) map2;
+    assertThrown!Exception(map2.put(1, fcc1));
+    assert(map2.length == 0);
+    throw_enabled = false;
+    map2.put(1, fcc1);
+    assert(map2.byValue.array.length == 1);
+    assert(map2.length == 1);
+    counter = 0;
+    throw_enabled = true;
+    map2.clear;
+    assertThrown!Exception(map2[1] = fcc1);
+    assert(map2.length == 0);
 }

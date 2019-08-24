@@ -6,6 +6,8 @@ private import std.experimental.allocator.gc_allocator;
 private import std.typecons;
 private import std.traits;
 
+private import optional;
+
 import cachetools.internal;
 import cachetools.containers.hashmap;
 import cachetools.containers.lists;
@@ -62,20 +64,22 @@ struct OrderedHashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true)
     }
 
     ///
-    V* put(K k, V v) @safe
+    auto put(K k, V v)
     {
         auto hashesptr = k in __hashes;
         if (hashesptr is null)
         {
             // append to list and store in hashes
             auto keysptr = __keys.insertBack(k);
-            hashesptr = __hashes.put(k, HashMapElement(v, keysptr));
+            __hashes.put(k, HashMapElement(v, keysptr));
+            return Optional!V();
         }
         else
         {
+            auto o = hashesptr.value;
             hashesptr.value = v;
+            return some(o);
         }
-        return &hashesptr.value;
     }
     ///
     /// map[key]
@@ -166,7 +170,7 @@ struct OrderedHashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true)
         }
     }
     ///
-    ref V getOrAdd(T)(K k, T defaultValue) @safe
+    V getOrAdd(T)(K k, T defaultValue) @safe
     {
         auto v = k in __hashes;
         if (v)
@@ -175,11 +179,14 @@ struct OrderedHashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true)
         }
         static if (isAssignable!(V, T))
         {
-            return *put(k, defaultValue);
+            put(k, defaultValue);
+            return defaultValue;
         }
         else static if (isCallable!T && isAssignable!(V, ReturnType!T))
         {
-            return *put(k, defaultValue());
+            auto value = defaultValue();
+            return put(k, value);
+            return value;
         }
         else
         {
