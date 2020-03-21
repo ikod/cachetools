@@ -93,7 +93,12 @@ output:
 ```
 [CacheEvent!(int, string)(Updated, 1, "one")]
 ```
-Each `CacheEvent` have `key` and `val` members and name of the event(Removed, Expired, Changed, Evicted).
+Each `CacheEvent` have `key` and `val` members and name of the event(Removed, Expired, Updated, Evicted).
+Events generated in case:
+* Event.Removed - when item removed from the cache via `remove(key)` or `clear()`.
+* Event.Expired - when item has TTL and get(key) for this item called.
+* Event.Updated - when you call put(key, value) and key already presented in cache.
+* Event.Evicted - when cache have some limits (like total number of items in cache or total size) and this limit reached, so we have to purge something from cache.
 
 ## Hash Table ##
 
