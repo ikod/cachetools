@@ -159,11 +159,11 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         private alias BucketStorage = RefCounted!(_BucketStorage, Allocator);
 
         BucketStorage   _buckets;
-        int             _buckets_num;
-        int             _mask;
-        int             _allocated;
-        int             _deleted;
-        int             _empty;
+        long             _buckets_num;
+        long            _mask;
+        long             _allocated;
+        long             _deleted;
+        long             _empty;
 
         int             _grow_factor = 4;
 
@@ -317,7 +317,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     // We use this function during resize() only.
     //
     private long findEmptyIndexExtended(const hash_t start_index,
-            ref BucketStorage buckets, int new_mask) pure const @safe @nogc
+            ref BucketStorage buckets, long new_mask) pure const @safe @nogc
     in {
         assert(start_index < buckets.bs.length);
     }
@@ -368,8 +368,8 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
     ///
     /// actual new size - closest power of 2
     ///
-    public void resize(int new_size) {
-        if ( new_size <= 0 ) {
+    public void resize(long new_size) {
+        if (new_size <= 0 ) {
             assert(0, "new size must be greater than 0");
         }
         if (popcnt(new_size) > 1) {
@@ -378,7 +378,8 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         }
         doResize(new_size);
     }
-    private void doResize(int dest) {
+
+    private void doResize(long dest) {
         immutable _new_buckets_num = dest;
         immutable _new_mask = dest - 1;
         BucketStorage _new_buckets = BucketStorage(_new_buckets_num);
@@ -388,7 +389,7 @@ struct HashMap(K, V, Allocator = Mallocator, bool GCRangesAllowed = true) {
         debug (cachetools)
             safe_tracef("start resizing: old loadfactor: %s", (1.0 * _allocated) / _buckets_num);
 
-        for (int i = 0; i < _buckets_num; i++) {
+        for (long i = 0; i < _buckets_num; i++) {
             immutable hash_t h = _buckets.bs[i].hash;
             if (h < ALLOCATED_HASH) { // empty or deleted
                 continue;
