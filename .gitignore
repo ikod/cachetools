@@ -1,0 +1,6 @@
+/*.a
+/.dub
+/Makefile
+/bin
+/cachetools
+/dub.selections.json
