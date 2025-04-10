@@ -358,7 +358,7 @@ class Cache2Q(K, V, Allocator=Mallocator)
     ///
     /// Evict something if we have to.
     ///
-    final PutResult put(K k, V v, TTL ttl = TTL())
+    final PutResult put()(K k, V v, TTL ttl = TTL())
     out
     {
         assert(__result != PutResult(PutResultFlag.None));
