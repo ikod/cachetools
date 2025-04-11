@@ -146,7 +146,7 @@ class CacheLRU(K, V, Allocator = Mallocator)
         return Nullable!V(store_ptr.value);
     }
     ///
-    final PutResult put(K k, V v, TTL ttl = TTL())
+    final PutResult put()(K k, V v, TTL ttl = TTL())
     out
     {
         assert(__result != PutResult(PutResultFlag.None));
@@ -423,7 +423,7 @@ unittest
 }
 
 // check if we can cache with immutable class keys and values
-@safe unittest
+@safe nothrow unittest
 {
     import cachetools.hash: hash_function;
     class C
@@ -437,7 +437,7 @@ unittest
         {
             return hash_function(s);
         }
-        bool opEquals(const C other) pure const @safe
+        bool opEquals(const C other) pure const @safe nothrow
         {
             auto i = [1,2];
             return s == other.s;

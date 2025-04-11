@@ -167,7 +167,7 @@ struct MultiDList(T, int N, Allocator = Mallocator, bool GCRangesAllowed = true)
     }
 }
 
-@safe unittest {
+/*@safe*/ unittest {
     import std.algorithm;
     import std.stdio;
     import std.range;

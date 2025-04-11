@@ -1433,7 +1433,7 @@ unittest {
 
     class Connection {
         Socket s;
-        bool opEquals(const Connection other) const pure @safe {
+        bool opEquals(const Connection other) const pure @safe nothrow {
             return s is other.s;
         }
 
