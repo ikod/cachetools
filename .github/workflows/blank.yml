@@ -1,23 +1,33 @@
-name: CI
-
-on: [push]
+name: Run all D Tests
+on: [push, pull_request]
 
 jobs:
   test:
+    name: Dub Tests
     strategy:
       matrix:
-        os: [macOS-latest, ubuntu-latest]
-        dc: [dmd-latest, ldc-latest]
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+        dc: [dmd, ldc, gdc-12]
+        # You have to exclude gdc configurations from non-linux OSes
+        exclude:
+          - { os: windows-latest, dc: gdc-12 }
+          - { os: macOS-latest, dc: gdc-12 }
+        # Or include them manually
+        include:
+          - { os: ubuntu-latest, dc: gdc }
+
     runs-on: ${{ matrix.os }}
-
     steps:
-    - uses: actions/checkout@v1
+      - uses: actions/checkout@v4
 
-    - name: D Compiler Installation
-      uses: mihails-strasuns/setup-dlang@v1.1.1
-      with:
-        compiler: ${{ matrix.dc }}
-      
-    - name: Test
-      run: |
-       dub test
+      - name: Install D compiler
+        uses: dlang-community/setup-dlang@v2
+        with:
+          compiler: ${{ matrix.dc }}
+          # dub doesn't come with gdc.
+          # You wouldn't need the line below if only using dmd or ldc
+          dub: latest
+
+      - name: Run tests
+        shell: bash
+        run: dub -q test
