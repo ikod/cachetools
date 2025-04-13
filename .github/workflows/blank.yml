@@ -1,6 +1,5 @@
 name: Run all D Tests
 on: [push, pull_request]
-timeout-minutes: 10
 
 jobs:
   test:
