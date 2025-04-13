@@ -12,10 +12,6 @@ jobs:
 
     steps:
     - uses: actions/checkout@v1
-    - uses: actions/setup-python@v1
-      with:
-        python-version: '3.x'
-    - run: pip install meson ninja
 
     - name: D Compiler Installation
       uses: mihails-strasuns/setup-dlang@v1.1.1
@@ -24,4 +20,4 @@ jobs:
       
     - name: Test
       run: |
-       dub test --config=std
+       dub test
