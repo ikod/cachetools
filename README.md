@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/ikod/cachetools.svg?branch=master)](https://travis-ci.org/ikod/cachetools)
+[![Run Tests](https://github.com/ikod/cachetools/actions/workflows/blank.yml/badge.svg)](https://github.com/ikod/cachetools/actions/workflows/blank.yml)
 [![codecov.io](https://codecov.io/github/ikod/cachetools/coverage.svg?branch=master)](https://codecov.io/github/ikod/cachetools?branch=master)
 [![Dub downloads](https://img.shields.io/dub/dt/cachetools.svg)](http://code.dlang.org/packages/cachetools)
 # cachetools #
